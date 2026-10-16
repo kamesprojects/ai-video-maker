@@ -37,11 +37,18 @@ HF_KEY=your-key-id:your-key-secret
 ```
 `.env` is ignored by git, so never commit or share it.
 
-**4. Add your inputs**
-- 1 video → `media/in/reference-video/`
+**4. (Optional) Your own settings and scratch prompt**
+```powershell
+copy config.example.py config.py                             # Mac/Linux: cp
+copy prompts\tmp-prompt.example.txt prompts\tmp-prompt.txt   # Mac/Linux: cp prompts/...
+```
+Both copies are ignored by git. Without `config.py` the defaults from `config.example.py` are used.
+
+**5. Add your inputs**
+- video(s) → `media/in/reference-video/`
 - images of the people → `media/in/reference-images/`
 
-**5. Check that everything works (free)**
+**6. Check that everything works (free)**
 ```powershell
 .\.venv\Scripts\python.exe main.py --test      # Mac/Linux: .venv/bin/python main.py --test
 ```
@@ -51,7 +58,7 @@ HF_KEY=your-key-id:your-key-secret
 **Yes.** You run generations yourself once these conditions are met:
 
 1. `.venv` is installed and `.env` contains your key (see Setup).
-2. `media/in/reference-video/` contains **exactly 1** video.
+2. `media/in/reference-video/` contains a video (if there are several, choose one with `--video`).
 3. `media/in/reference-images/` contains at least 1 image.
 4. You have credits on Higgsfield.
 
@@ -88,6 +95,46 @@ A generation takes a few minutes. The script prints the status (`Queued` → `In
 
 **Kling:** Kling 3.0 has no reference-to-video, so the project uses **Kling O3 Video Edit**. It edits the input video, so the output has the same length as the (trimmed) input. Instead of a resolution it has a quality mode: `480p`/`720p` = `std`, `1080p` = `pro`. No audio.
 
+## Configuration (`config.py`)
+
+- [`config.example.py`](config.example.py) holds the **defaults** and is committed to git.
+- `config.py` holds **your** settings and is **ignored by git**, so your file names and choices stay private. Create it with `copy config.example.py config.py`. It may contain only the lines you change; everything else comes from `config.example.py`.
+- [`settings.py`](settings.py) merges the two; the code always reads from it.
+
+Available settings:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `REFERENCE_VIDEO` | `None` | which video to use (`None` = the only one in the folder) |
+| `REFERENCE_IMAGES` | `None` | which images, in order: a list `["gazi", "kristian"]` or text `"gazi"` / `"gazi, kristian"` (`None` = all, sorted by name) |
+| `DEFAULT_MODEL` | `"wan"` | `wan`, `seedance`, `kling` |
+| `DEFAULT_RESOLUTION` | `"480p"` | `480p`, `720p`, `1080p` |
+| `DEFAULT_PROMPT` | `"one-person"` | a key from `PROMPTS` in `prompt.py`, or `"tmp-prompt"` |
+| `GENERATE_AUDIO` | `False` | the model generates sound for the output (wan, seedance) |
+| `MUTE_REFERENCE_VIDEO` | `False` | upload the reference video without sound (same as `--mute`) |
+| `MAX_DURATION` | `20` | seconds; longer reference videos are trimmed, also the output length |
+| `MAX_UPLOAD_MB` | `10` | bigger reference videos are compressed before upload |
+| `MAX_SIDE_PX` | `1280` | longer side of the uploaded video |
+| `TIMEOUT_S` | `600` | upload / API timeout in seconds |
+| `TMP_PROMPT_FILE` | `prompts/tmp-prompt.txt` | text file used by the `tmp-prompt` prompt |
+| `IN_VIDEO_DIR`, `IN_IMAGES_DIR`, `OUT_DIR`, `TMP_DIR` | `media/...` | input, output and temp folders |
+
+**Command-line arguments override the config for one run.** For example, with `REFERENCE_VIDEO = "football"` in the config, `python main.py --video song` uses `song` this time. `--help` and `--test` always show the values that will really be used.
+
+## Choosing the video and images
+
+You can keep several videos and many photos in the input folders and pick per run:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --video football --images gazi,kristian --test
+```
+
+- **`--video NAME`:** which video from `media/in/reference-video/` to use. Without it, the only video in the folder is used; with several videos the script asks you to choose.
+- **`--images A,B,…`:** which photos from `media/in/reference-images/` to use, **in this order**: the first is Image 1, the second Image 2… Without it, all photos are used, sorted by name.
+- **Names:** you can write the full name (`football-video.mp4`), the name without extension (`football-video`) or just a part that fits only one file (`football`). Upper/lower case doesn't matter. If the name fits no file or several files, the script lists what is available.
+- `--video=NAME` and `--images=A,B` also work.
+- `--test` prints the chosen video and `Image 1`, `Image 2`… so you can check the order before paying.
+
 ## Prompts
 
 Prompts live in [`prompt.py`](prompt.py) in the `PROMPTS` object. Pick the one that matches your **reference video**:
@@ -106,7 +153,14 @@ Tips for good results:
 - Use clear, well-lit photos where the face is fully visible (no sunglasses, no heavy filters).
 - Describe **what to keep** (motion, background, camera), not what the person looks like. The look comes from the images.
 
-**Adding your own prompt:** add a new entry to `PROMPTS` in `prompt.py`, e.g. `"two-people": """..."""`. The key is the name you type on the command line. It must not clash with a model or resolution name (a test checks this). Refer to the inputs as "Video 1" and "Image 1", "Image 2"… To change the default, set `DEFAULT_PROMPT`.
+**Trying a prompt quickly (`tmp-prompt`):** write plain text (no Python, no quotes) into `prompts/tmp-prompt.txt` and run:
+```powershell
+.\.venv\Scripts\python.exe main.py tmp-prompt --test     # shows the start of the text
+.\.venv\Scripts\python.exe main.py tmp-prompt
+```
+The file is ignored by git; `prompts/tmp-prompt.example.txt` is the committed template. To use it by default, set `DEFAULT_PROMPT = "tmp-prompt"` in `config.py`. If the file is missing or empty, the script stops instead of sending an empty prompt.
+
+**Adding your own prompt:** add a new entry to `PROMPTS` in `prompt.py`, e.g. `"two-people": """..."""`. The key is the name you type on the command line. It must not clash with a model or resolution name (a test checks this). Refer to the inputs as "Video 1" and "Image 1", "Image 2"… To change the default, set `DEFAULT_PROMPT` in `config.py`.
 
 ## Zip inputs and outputs
 
@@ -120,11 +174,15 @@ The zip is saved to `zips/media_<date>.zip`. The `zips/` folder is ignored by gi
 
 | Folder / file | Contents |
 |---|---|
-| `media/in/reference-video/` | **exactly 1** video (`.mp4`, `.mov`) |
-| `media/in/reference-images/` | images of the people (`.jpg`, `.png`, `.webp`), sorted alphabetically by name: the 1st file = Image 1, the 2nd = Image 2… (name them `1_….jpg`, `2_….jpg` to control the order) |
+| `media/in/reference-video/` | reference videos (`.mp4`, `.mov`). One is used automatically; with several, choose with `--video` |
+| `media/in/reference-images/` | images of the people (`.jpg`, `.png`, `.webp`). By default all of them, sorted by name; choose which and in what order with `--images` |
 | `media/out/` | finished videos (`model_resolution_prompt_date.mp4`) |
-| `prompt.py` | the prompts (`PROMPTS` object) and `DEFAULT_PROMPT` |
-| `main.py` | settings (default model, resolution, max duration, audio) and the entry point |
+| `prompt.py` | the prompts (`PROMPTS` object) |
+| `prompts/` | `tmp-prompt.txt` (your scratch prompt, not in git) and `tmp-prompt.example.txt` |
+| `config.example.py` | default settings (in git) |
+| `config.py` | **your settings** (not in git), see [Configuration](#configuration-configpy) |
+| `settings.py` | merges `config.example.py` + `config.py`; the code reads settings from here |
+| `main.py` | the entry point (command line, summary, run) |
 | `models/` | one class per model (`wan.py`, `seedance.py`, `kling.py`) defining its API parameters |
 | `generation/` | the generation itself: upload, request, wait, download |
 | `utils.py` | shared helpers (files, video duration and size, API key) |

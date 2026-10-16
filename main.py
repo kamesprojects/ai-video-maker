@@ -1,7 +1,7 @@
 """
 Higgsfield API – reference video + images -> video (Wan 3.0 / Seedance 2.5 / Kling O3)
 
-Prompts are in prompt.py, inputs in media/in/, results in media/out/. See README.md.
+Settings: config.example.py (defaults) and your config.py. Prompts: prompt.py. See README.md.
 
     .venv\\Scripts\\python.exe main.py --help              # all arguments and examples
     .venv\\Scripts\\python.exe main.py --test              # check only, nothing is billed
@@ -13,38 +13,35 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
+import settings
 from generation import generate
 from models import Kling, Seedance, Wan
-from prompt import DEFAULT_PROMPT, PROMPTS
+from prompt import get_prompt, prompt_names
 from utils import (IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, describe_size, file_size_mb,
                    has_audio, list_files, needs_compression, prepare_video,
-                   video_duration, video_size)
+                   select_file, video_duration, video_size)
 
-# ===================== SETTINGS =====================
-
-MAX_DURATION = 20      # longer reference videos are trimmed to this before upload
-MAX_UPLOAD_MB = 10     # bigger reference videos are compressed before upload
-AUDIO = False          # wan/seedance; kling has no audio
+# Settings: config.example.py + your config.py (see settings.py).
+MAX_DURATION = settings.MAX_DURATION
+MAX_UPLOAD_MB = settings.MAX_UPLOAD_MB
+DEFAULT_MODEL = settings.DEFAULT_MODEL
+DEFAULT_RESOLUTION = settings.DEFAULT_RESOLUTION
+DEFAULT_PROMPT = settings.DEFAULT_PROMPT
+IN_VIDEO = settings.IN_VIDEO_DIR
+IN_IMAGES = settings.IN_IMAGES_DIR
+OUT = settings.OUT_DIR
+TMP = settings.TMP_DIR
 
 MODELS = {
-    "wan": Wan(audio=AUDIO, max_duration=MAX_DURATION),
-    "seedance": Seedance(audio=AUDIO, max_duration=MAX_DURATION),
+    "wan": Wan(audio=settings.GENERATE_AUDIO, max_duration=MAX_DURATION),
+    "seedance": Seedance(audio=settings.GENERATE_AUDIO, max_duration=MAX_DURATION),
     "kling": Kling(),
 }
-DEFAULT_MODEL = "wan"
-
 RESOLUTIONS = ["480p", "720p", "1080p"]
-DEFAULT_RESOLUTION = "480p"
-
-IN_VIDEO = Path("media/in/reference-video")
-IN_IMAGES = Path("media/in/reference-images")
-OUT = Path("media/out")
-TMP = Path("media/tmp")   # compressed copies of reference videos
-
-# ====================================================
 
 
 FLAGS = ["--test", "--mute"]
+VALUE_OPTIONS = ["--video", "--images"]   # take a value: --video x or --video=x
 
 
 class Args(NamedTuple):
@@ -53,6 +50,8 @@ class Args(NamedTuple):
     prompt: str
     test: bool
     mute: bool
+    video: str | None = None          # None = the only video in the folder
+    images: list[str] | None = None   # None = all images, sorted by name
 
 
 def options(names, default) -> str:
@@ -60,20 +59,26 @@ def options(names, default) -> str:
 
 
 def help_text() -> str:
-    return f"""Usage: python main.py [model] [resolution] [prompt] [--test] [--mute]
+    return f"""Usage: python main.py [model] [resolution] [prompt] [--video NAME] [--images A,B]
+                      [--test] [--mute]
 
-Arguments can be in any order. Anything you leave out uses the default.
+Arguments can be in any order. Anything you leave out uses the default from config.py
+(or config.example.py).
 
-  model        {options(MODELS, DEFAULT_MODEL)}
-  resolution   {options(RESOLUTIONS, DEFAULT_RESOLUTION)}
-  prompt       {options(PROMPTS, DEFAULT_PROMPT)}   (edit in prompt.py)
+  model           {options(MODELS, DEFAULT_MODEL)}
+  resolution      {options(RESOLUTIONS, DEFAULT_RESOLUTION)}
+  prompt          {options(prompt_names(), DEFAULT_PROMPT)}
+                  (edit in prompt.py; tmp-prompt = text in {settings.TMP_PROMPT_FILE.as_posix()})
 
-  --test       free check: print what would be sent, upload and bill nothing
-  --mute       upload the reference video without sound
-               (the original in media/in is not changed)
-  -h, --help   show this help
+  --video NAME    which video from {IN_VIDEO.as_posix()}/ to use
+                  (default: the only one there; extension optional)
+  --images A,B    which images from {IN_IMAGES.as_posix()}/ to use, in this order:
+                  A = Image 1, B = Image 2... (default: all, sorted by name)
+  --test          free check: print what would be sent, upload and bill nothing
+  --mute          upload the reference video without sound
+                  (the original in media/in is not changed)
+  -h, --help      show this help
 
-Inputs:   1 video in {IN_VIDEO.as_posix()}/, images in {IN_IMAGES.as_posix()}/
 Output:   {OUT.as_posix()}/<model>_<resolution>_<prompt>_<date>.mp4
 
 Examples:
@@ -82,24 +87,44 @@ Examples:
   python main.py seedance 720p --test         check another model and resolution
   python main.py kling 1080p four-people      generate with Kling and the 4-people prompt
   python main.py --mute                       generate, reference video sent without sound
+  python main.py --video song --images kristian,kamil --test
+                                              check a chosen video and 2 images in that order
 
 Without --test every run is a PAID generation. See README.md for details."""
 
 
+def split_value_options(argv: list[str]) -> tuple[list[str], dict[str, str]]:
+    """Pull out --video / --images and their values; return (other args, values)."""
+    rest, values = [], {}
+    tokens = iter(argv)
+    for token in tokens:
+        key, has_equals, value = token.partition("=")
+        if key.lower() not in VALUE_OPTIONS:
+            rest.append(token)
+            continue
+        value = value if has_equals else next(tokens, "")
+        if not value or value.startswith("--"):
+            raise SystemExit(f"{key} needs a value, e.g. {key} NAME")
+        values[key.lower()] = value
+    return rest, values
+
+
 def parse_args(argv: list[str]) -> Args:
-    """Arguments in any order -> Args(model, resolution, prompt, test, mute)."""
-    args = [a.lower() for a in argv]
+    """Arguments in any order -> Args."""
+    rest, values = split_value_options(argv)
+    args = [a.lower() for a in rest]
     if "-h" in args or "--help" in args:
         print(help_text())
         raise SystemExit(0)
-    test, mute = "--test" in args, "--mute" in args
+    test = "--test" in args
+    mute = "--mute" in args or settings.MUTE_REFERENCE_VIDEO
     args = [a for a in args if a not in FLAGS]
 
-    unknown = [a for a in args if a not in MODELS and a not in RESOLUTIONS and a not in PROMPTS]
+    unknown = [a for a in args if a not in MODELS and a not in RESOLUTIONS and a not in prompt_names()]
     if unknown:
         raise SystemExit(
             f"Unknown argument: {', '.join(unknown)}. Models: {', '.join(MODELS)} | "
-            f"resolutions: {', '.join(RESOLUTIONS)} | prompts: {', '.join(PROMPTS)}\n"
+            f"resolutions: {', '.join(RESOLUTIONS)} | prompts: {', '.join(prompt_names())}\n"
             f"Run python main.py --help for usage."
         )
 
@@ -107,18 +132,40 @@ def parse_args(argv: list[str]) -> Args:
         return next((a for a in args if a in options), default)
 
     return Args(pick(MODELS, DEFAULT_MODEL), pick(RESOLUTIONS, DEFAULT_RESOLUTION),
-                pick(PROMPTS, DEFAULT_PROMPT), test, mute)
+                pick(prompt_names(), DEFAULT_PROMPT), test, mute,
+                values.get("--video") or settings.REFERENCE_VIDEO,
+                name_list(values.get("--images") or settings.REFERENCE_IMAGES))
 
 
-def find_inputs() -> tuple[Path, list[Path]]:
-    """The one reference video and the reference images."""
+def name_list(names: str | list[str] | None) -> list[str] | None:
+    """"a, b" or ["a", "b"] -> ["a", "b"]; empty -> None (= all images)."""
+    if isinstance(names, str):
+        names = names.split(",")
+    cleaned = [n.strip() for n in names or [] if n.strip()]
+    return cleaned or None
+
+
+def find_video(name: str | None) -> Path:
+    """The video called `name`, or the only video in the folder."""
     videos = list_files(IN_VIDEO, VIDEO_EXTENSIONS)
+    if name:
+        return select_file(videos, name, IN_VIDEO)
+    if len(videos) == 1:
+        return videos[0]
+    if not videos:
+        raise SystemExit(f"No video in {IN_VIDEO.as_posix()}/.")
+    raise SystemExit(f"{IN_VIDEO.as_posix()}/ has {len(videos)} videos: "
+                     f"{', '.join(v.name for v in videos)}. Choose one with --video NAME.")
+
+
+def find_images(names: list[str] | None) -> list[Path]:
+    """The images in the given order, or all images sorted by name."""
     images = list_files(IN_IMAGES, IMAGE_EXTENSIONS)
-    if len(videos) != 1:
-        raise SystemExit(f"{IN_VIDEO} must contain exactly 1 video (found: {len(videos)}).")
+    if names:
+        return [select_file(images, n, IN_IMAGES) for n in names]
     if not images:
-        raise SystemExit(f"{IN_IMAGES} contains no images.")
-    return videos[0], images
+        raise SystemExit(f"No images in {IN_IMAGES.as_posix()}/.")
+    return images
 
 
 def audio_summary(video: Path, mute: bool) -> str:
@@ -127,15 +174,20 @@ def audio_summary(video: Path, mute: bool) -> str:
     return "removed before upload (--mute)" if mute else "sent with the video"
 
 
-def print_summary(args: Args, model, video, images, settings):
+def preview(text: str, length: int = 70) -> str:
+    one_line = " ".join(text.split())
+    return one_line if len(one_line) <= length else one_line[:length] + "..."
+
+
+def print_summary(args: Args, model, prompt_text, video, images, model_settings):
     print(f"Model:      {args.model} ({model.endpoint})")
-    print(f"Prompt:     {args.prompt}")
+    print(f"Prompt:     {args.prompt}: {preview(prompt_text)}")
     print(f"Video:      {video.name} ({video_duration(video):.1f} s, {file_size_mb(video):.1f} MB, "
           f"{describe_size(video_size(video))})")
     print(f"Audio:      {audio_summary(video, args.mute)}")
     if args.mute or needs_compression(video, MAX_DURATION, MAX_UPLOAD_MB):
         print(f"Upload:     prepared copy in {TMP.as_posix()}/, max {MAX_DURATION} s, H.264")
-    print(f"Parameters: {settings}")
+    print(f"Parameters: {model_settings}")
     for i, f in enumerate(images, 1):
         print(f"Image {i}:    {f.name}")
 
@@ -143,16 +195,17 @@ def print_summary(args: Args, model, video, images, settings):
 def main():
     args = parse_args(sys.argv[1:])
     model = MODELS[args.model]
-    video, images = find_inputs()
-    settings = model.settings(video, args.resolution)
+    prompt_text = get_prompt(args.prompt)
+    video, images = find_video(args.video), find_images(args.images)
+    model_settings = model.settings(video, args.resolution)
 
-    print_summary(args, model, video, images, settings)
+    print_summary(args, model, prompt_text, video, images, model_settings)
     if args.test:
         print("\n--test: nothing was uploaded or generated.")
         return
 
     video = prepare_video(video, MAX_DURATION, MAX_UPLOAD_MB, TMP, audio=not args.mute)
-    generate(model, PROMPTS[args.prompt], video, images, settings, OUT,
+    generate(model, prompt_text, video, images, model_settings, OUT,
              f"{args.model}_{args.resolution}_{args.prompt}{'_muted' if args.mute else ''}")
 
 

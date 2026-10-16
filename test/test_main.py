@@ -5,17 +5,42 @@ from pathlib import Path
 import pytest
 
 import main
-from prompt import DEFAULT_PROMPT, PROMPTS
+import settings
+from prompt import PROMPTS, prompt_names
+from settings import DEFAULT_PROMPT
 
 
 def test_defaults_without_arguments():
-    assert main.parse_args([]) == ("wan", "480p", DEFAULT_PROMPT, False, False)
+    assert main.parse_args([]) == (
+        settings.DEFAULT_MODEL, settings.DEFAULT_RESOLUTION, settings.DEFAULT_PROMPT, False,
+        settings.MUTE_REFERENCE_VIDEO, settings.REFERENCE_VIDEO,
+        main.name_list(settings.REFERENCE_IMAGES),
+    )
+
+
+def test_config_inputs_are_used_without_arguments(monkeypatch):
+    monkeypatch.setattr(settings, "REFERENCE_VIDEO", "football")
+    monkeypatch.setattr(settings, "REFERENCE_IMAGES", ["gazi", "kristian"])
+    monkeypatch.setattr(settings, "MUTE_REFERENCE_VIDEO", True)
+
+    args = main.parse_args([])
+
+    assert (args.video, args.images, args.mute) == ("football", ["gazi", "kristian"], True)
+
+
+def test_command_line_overrides_config(monkeypatch):
+    monkeypatch.setattr(settings, "REFERENCE_VIDEO", "football")
+    monkeypatch.setattr(settings, "REFERENCE_IMAGES", ["gazi"])
+
+    args = main.parse_args(["--video", "song", "--images", "kristian"])
+
+    assert (args.video, args.images) == ("song", ["kristian"])
 
 
 def test_arguments_in_any_order_and_case():
     result = main.parse_args(["FOUR-PEOPLE", "--test", "720p", "seedance"])
 
-    assert result == ("seedance", "720p", "four-people", True, False)
+    assert result[:4] == ("seedance", "720p", "four-people", True)
 
 
 @pytest.mark.parametrize("prompt_name", list(PROMPTS))
@@ -41,7 +66,7 @@ def test_help_prints_usage_and_exits_ok(flag, capsys):
 def test_help_lists_every_option():
     text = main.help_text()
 
-    for name in [*main.MODELS, *main.RESOLUTIONS, *PROMPTS, *main.FLAGS, "--help"]:
+    for name in [*main.MODELS, *main.RESOLUTIONS, *prompt_names(), *main.FLAGS, "--help"]:
         assert name in text
     assert f"{main.DEFAULT_MODEL} (default)" in text
     assert f"{DEFAULT_PROMPT} (default)" in text
@@ -72,7 +97,7 @@ def test_default_prompt_exists():
 
 def test_option_names_do_not_overlap():
     """A name in two lists would make the argument ambiguous."""
-    names = [*main.MODELS, *main.RESOLUTIONS, *PROMPTS]
+    names = [*main.MODELS, *main.RESOLUTIONS, *prompt_names()]
 
     assert len(names) == len(set(names))
 

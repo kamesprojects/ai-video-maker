@@ -53,3 +53,4 @@ A pull request is ready to merge when **all** of these are true:
 - Match the surrounding code: English names, short functions, type hints on public functions.
 - Model-specific logic belongs in its class in `models/`, shared helpers in `utils.py`, API calls in `generation/`.
 - Never print or log API keys or other secrets.
+- New settings go into `config.example.py` (with a comment), never only into your own `config.py`. Code reads them via `settings`.

@@ -29,3 +29,7 @@ zips/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Personal settings and scratch prompts (examples are committed)
+/config.py
+prompts/tmp-prompt.txt

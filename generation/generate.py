@@ -5,9 +5,8 @@ from datetime import datetime
 from pathlib import Path
 
 from models import Model
+from settings import TIMEOUT_S   # SDK default is 90 s, too short to upload a video on a slow connection
 from utils import load_api_key
-
-TIMEOUT_S = 600   # SDK default is 90 s, too short to upload a video on a slow connection
 
 
 def generate(model: Model, prompt: str, video: Path, images: list[Path],

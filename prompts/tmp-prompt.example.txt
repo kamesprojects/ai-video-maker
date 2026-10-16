@@ -1,0 +1,4 @@
+Use Video 1 as the base. Replace the person in Video 1 with the person from Image 1.
+
+Keep the exact motion, pose, framing, background, lighting and camera movement
+from Video 1. Make the result look natural and photorealistic, with no flickering.

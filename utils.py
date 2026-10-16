@@ -8,6 +8,8 @@ from pathlib import Path
 
 import imageio_ffmpeg
 from dotenv import load_dotenv
+
+from settings import MAX_SIDE_PX
 from mutagen.mp4 import MP4
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v"}
@@ -18,6 +20,20 @@ def list_files(folder: Path, extensions: set) -> list[Path]:
     """Files with the given extensions in a folder, sorted by name."""
     folder.mkdir(parents=True, exist_ok=True)
     return sorted(p for p in folder.iterdir() if p.suffix.lower() in extensions)
+
+
+def select_file(files: list[Path], name: str, folder: Path) -> Path:
+    """The file matching `name`, any case: full name, name without extension,
+    or a part of the name that fits exactly one file."""
+    wanted = name.lower()
+    exact = [f for f in files if wanted in (f.name.lower(), f.stem.lower())]
+    partial = [f for f in files if wanted in f.name.lower()]
+    for matches in (exact, partial):
+        if len(matches) == 1:
+            return matches[0]
+    available = ", ".join(f.name for f in files) or "nothing"
+    problem = "matches several files" if partial else "not found"
+    raise SystemExit(f"'{name}' {problem} in {folder.as_posix()}/. Available: {available}")
 
 
 def video_duration(video: Path) -> float:
@@ -73,8 +89,6 @@ def closest_aspect_ratio(size, ratios: list[str]) -> str:
 
     return min(ratios, key=distance)
 
-
-MAX_SIDE_PX = 1280   # longer side of the uploaded video
 
 # Scale so the longer side is at most MAX_SIDE_PX (never upscale), keep ratio
 SCALE_FILTER = (

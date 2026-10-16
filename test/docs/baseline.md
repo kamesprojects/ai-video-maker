@@ -167,9 +167,19 @@ Reference videos that are longer than `MAX_DURATION` (20 s) or bigger than `MAX_
 Command-line arguments and prompt selection.
 
 ### `test_defaults_without_arguments`
-- **What it checks:** no arguments → `wan`, `480p`, `DEFAULT_PROMPT`, not a test run.
-- **Why:** `python main.py` must do the documented default.
+- **What it checks:** no arguments → every value comes from `config.py` (model, resolution, prompt, mute, video, images), not a test run.
+- **Why:** `python main.py` must do what the config says. The test reads the expected values from `config.py`, so editing the config doesn't break it.
 - **Test double:** none.
+
+### `test_config_inputs_are_used_without_arguments`
+- **What it checks:** `REFERENCE_VIDEO`, `REFERENCE_IMAGES` and `MUTE_REFERENCE_VIDEO` from `config.py` are used when no arguments are given.
+- **Why:** the user can set their inputs once in the config instead of typing them every run.
+- **Test double:** stubs — config values replaced with `monkeypatch`.
+
+### `test_command_line_overrides_config`
+- **What it checks:** `--video` and `--images` win over the values in `config.py`.
+- **Why:** the documented rule "command line overrides config for one run".
+- **Test double:** stubs — config values replaced with `monkeypatch`.
 
 ### `test_arguments_in_any_order_and_case`
 - **What it checks:** `FOUR-PEOPLE --test 720p seedance` is parsed correctly.
@@ -219,6 +229,119 @@ Command-line arguments and prompt selection.
 ### `test_prompts_reference_the_inputs` (one case per prompt)
 - **What it checks:** every prompt mentions "Video 1" and "reference image".
 - **Why:** the models need to know which input is the video and which are the images.
+- **Test double:** none.
+
+## `test/test_inputs.py`
+
+Choosing the reference video and images with `--video` and `--images`.
+
+### `test_video_and_images_options` (3 cases)
+- **What it checks:** `--video X` / `--video=X` and `--images A,B` are parsed in any order; file-name case and image order are kept, spaces around commas are ignored.
+- **Why:** image order decides Image 1, Image 2… in the prompt.
+- **Test double:** none.
+
+### `test_video_and_images_default_to_none`
+- **What it checks:** without the options both values are `None` (= automatic choice).
+- **Why:** the old behavior stays the default.
+- **Test double:** none.
+
+### `test_reference_images_in_config_accepts_text_or_list` (5 cases)
+- **What it checks:** `REFERENCE_IMAGES` in `config.py` works as text (`"gazi-kiko.png"`, `"gazi, kristian"`) or a list; empty text or list means "all images".
+- **Why:** writing a single name as text was read letter by letter (`'g' matches several files`).
+- **Test double:** stub — config value replaced with `monkeypatch`.
+
+### `test_option_without_value_exits` (3 cases)
+- **What it checks:** `--video` without a value, `--images` followed by another flag, and `--video=` exit with "needs a value".
+- **Why:** `--images --test` must not treat `--test` as an image name and skip the dry run.
+- **Test double:** none.
+
+### `test_select_file_by_name_or_stem_any_case` (4 cases)
+- **What it checks:** a file is found by full name or name without extension, in any case.
+- **Why:** phone videos often have upper-case extensions (`.MP4`).
+- **Test double:** none (plain `Path` objects, no files needed).
+
+### `test_select_file_by_unique_part_of_name`
+- **What it checks:** `football` finds `football-video.mp4` when it is the only match.
+- **Why:** shorter commands for the user.
+- **Test double:** none.
+
+### `test_select_file_ambiguous_part_exits`
+- **What it checks:** a part that fits several files exits with "matches several files".
+- **Why:** never guess between two videos and pay for the wrong one.
+- **Test double:** none.
+
+### `test_select_file_exact_name_wins_over_partial`
+- **What it checks:** `kamil` picks `kamil.png`, not `kamil-2.png`.
+- **Why:** an exact name must always be selectable even if it is part of another name.
+- **Test double:** none.
+
+### `test_select_file_unknown_lists_available`
+- **What it checks:** an unknown name exits and lists the available files.
+- **Why:** the user sees right away what they can choose.
+- **Test double:** none.
+
+### `test_only_video_is_used_by_default`, `test_several_videos_require_a_choice`, `test_chosen_video_among_several`, `test_no_video_exits`
+- **What they check:** one video → used automatically; several → exit asking for `--video`; `--video` picks among several; empty folder → clear error.
+- **Why:** with several videos the script must never pick one silently.
+- **Test double:** fake folders — `IN_VIDEO` / `IN_IMAGES` point to temp folders with empty files.
+
+### `test_all_images_sorted_by_default`, `test_chosen_images_keep_the_given_order`, `test_unknown_image_exits`, `test_no_images_exits`
+- **What they check:** default = all images sorted by name (other files ignored); `--images c,a` keeps that order; unknown name and empty folder exit with a clear error.
+- **Why:** the order maps people to Image 1, Image 2… in the prompt.
+- **Test double:** fake folders as above.
+
+## `test/test_settings.py`
+
+Settings loading (`config.example.py` + personal `config.py`) and the `tmp-prompt` file.
+
+### `test_load_uses_example_when_config_is_missing`
+- **What it checks:** without `config.py`, all values come from `config.example.py`.
+- **Why:** a fresh clone has no `config.py` (it is ignored by git) and must still work.
+- **Test double:** fake config files written to `tmp_path`.
+
+### `test_load_config_overrides_only_what_it_sets`
+- **What it checks:** a `config.py` with one line overrides that value and keeps the rest from the example.
+- **Why:** users keep only their changes; new settings added to the example later still arrive.
+- **Test double:** fake config files.
+
+### `test_load_ignores_imports_and_lowercase_names`
+- **What it checks:** only UPPER_CASE names become settings (`Path` import and helpers are ignored).
+- **Why:** keeps the settings namespace clean.
+- **Test double:** fake config file.
+
+### `test_real_example_defines_everything_the_code_uses`
+- **What it checks:** the real `config.example.py` defines every setting the code reads.
+- **Why:** a missing default would crash a fresh clone.
+- **Test double:** none (reads the real file).
+
+### `test_real_example_has_neutral_inputs`
+- **What it checks:** `REFERENCE_VIDEO` and `REFERENCE_IMAGES` are `None` in the committed example.
+- **Why:** personal file names belong in `config.py`, not in git.
+- **Test double:** none.
+
+### `test_tmp_prompt_is_a_selectable_name`
+- **What it checks:** `tmp-prompt` is offered next to the prompts from `PROMPTS`.
+- **Why:** it must work on the command line, in `--help` and in `DEFAULT_PROMPT`.
+- **Test double:** none.
+
+### `test_tmp_prompt_reads_the_file`
+- **What it checks:** the text is read from `TMP_PROMPT_FILE` with surrounding whitespace removed.
+- **Why:** plain text editing without Python syntax.
+- **Test double:** stub — `TMP_PROMPT_FILE` points to a temp file.
+
+### `test_tmp_prompt_missing_file_exits`, `test_tmp_prompt_empty_file_exits`
+- **What they check:** a missing file exits with instructions to copy the example; an empty file exits with "is empty".
+- **Why:** never send an empty prompt to a paid generation.
+- **Test double:** stub — `TMP_PROMPT_FILE` points to a missing / empty temp file.
+
+### `test_named_prompt_comes_from_prompts`
+- **What it checks:** other names still return the text from `PROMPTS`.
+- **Why:** `tmp-prompt` must not change how the built-in prompts work.
+- **Test double:** none.
+
+### `test_tmp_prompt_example_file_exists`
+- **What it checks:** `prompts/tmp-prompt.example.txt` exists and is not empty.
+- **Why:** the error message tells users to copy it.
 - **Test double:** none.
 
 ## How to run

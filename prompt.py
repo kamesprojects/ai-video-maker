@@ -1,4 +1,11 @@
-"""Prompts. The key is the name you type on the command line: python main.py <name>."""
+"""Prompts. The key is the name you type on the command line: python main.py <name>.
+
+Besides PROMPTS there is "tmp-prompt": its text is read from TMP_PROMPT_FILE
+(prompts/tmp-prompt.txt, not in git) so you can try prompts without editing code.
+The default prompt is DEFAULT_PROMPT in config.py.
+"""
+
+import settings
 
 PROMPTS = {
     # 1 person in the video, 1 or more images of the SAME person (more angles = better match)
@@ -46,4 +53,23 @@ natural and photorealistic, with realistic lighting, shadows, skin texture,
 proportions and seamless blending, with no flickering or face morphing.""",
 }
 
-DEFAULT_PROMPT = "one-person"
+TMP_PROMPT = "tmp-prompt"
+
+
+def prompt_names() -> list[str]:
+    """Every name that can be used on the command line."""
+    return [*PROMPTS, TMP_PROMPT]
+
+
+def get_prompt(name: str) -> str:
+    """The prompt text; "tmp-prompt" is read from TMP_PROMPT_FILE."""
+    if name != TMP_PROMPT:
+        return PROMPTS[name]
+    path = settings.TMP_PROMPT_FILE
+    if not path.exists():
+        raise SystemExit(f"{path.as_posix()} not found. Copy prompts/tmp-prompt.example.txt "
+                         f"to {path.as_posix()} and write your prompt in it.")
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        raise SystemExit(f"{path.as_posix()} is empty. Write your prompt in it.")
+    return text
