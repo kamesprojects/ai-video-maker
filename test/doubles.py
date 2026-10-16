@@ -47,6 +47,11 @@ def fake_higgsfield(statuses: list[str], result: dict) -> types.ModuleType:
                 on_queue_update(getattr(module, name)())
         return result
 
+    def sync_client(timeout=None):
+        module.calls["timeout"] = timeout
+        return module   # the fake module doubles as the client
+
     module.upload_file = upload_file
     module.subscribe = subscribe
+    module.SyncClient = sync_client
     return module

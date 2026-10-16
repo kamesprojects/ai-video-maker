@@ -47,6 +47,12 @@ def test_completed_uploads_sends_and_downloads(run, tmp_path):
     assert output.name.startswith("kling_1080p_")
 
 
+def test_client_uses_long_timeout_for_uploads(run):
+    _, fake = run(["Completed"], COMPLETED)
+
+    assert fake.calls["timeout"] == gen.TIMEOUT_S > 90
+
+
 @pytest.mark.parametrize("status, message", [
     ("NSFW", "moderation"),
     ("Cancelled", "cancelled"),

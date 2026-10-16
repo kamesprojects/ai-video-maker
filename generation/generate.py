@@ -7,17 +7,20 @@ from pathlib import Path
 from models import Model
 from utils import load_api_key
 
+TIMEOUT_S = 600   # SDK default is 90 s, too short to upload a video on a slow connection
+
 
 def generate(model: Model, prompt: str, video: Path, images: list[Path],
              settings: dict, out_dir: Path, file_prefix: str) -> Path:
     """Run a PAID generation and return the path of the saved video."""
     load_api_key()
     import higgsfield_client  # import after the key is loaded
+    client = higgsfield_client.SyncClient(timeout=TIMEOUT_S)
 
     # 1) Upload files
     print("\nUploading files ...")
-    video_url = higgsfield_client.upload_file(video)
-    image_urls = [higgsfield_client.upload_file(f) for f in images]
+    video_url = client.upload_file(video)
+    image_urls = [client.upload_file(f) for f in images]
 
     # 2) Send the request and wait for the result
     last_status = None
@@ -29,7 +32,7 @@ def generate(model: Model, prompt: str, video: Path, images: list[Path],
         last_status = status
 
     print(f"Sending request to {model.endpoint} ...")
-    result = higgsfield_client.subscribe(
+    result = client.subscribe(
         model.endpoint,
         arguments=model.arguments(prompt, video_url, image_urls, settings),
         on_enqueue=lambda rid: print(f"Request ID: {rid}"),

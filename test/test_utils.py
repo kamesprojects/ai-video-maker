@@ -53,6 +53,16 @@ def test_closest_aspect_ratio(size, expected):
     assert utils.closest_aspect_ratio(size, ratios) == expected
 
 
+@pytest.mark.parametrize("size, expected", [
+    ((1920, 1080), "1920x1080, horizontal, ~16:9"),
+    ((1080, 1920), "1080x1920, vertical, ~9:16"),
+    ((720, 720), "720x720, square, ~1:1"),
+    (None, "unknown size"),
+])
+def test_describe_size(size, expected):
+    assert utils.describe_size(size) == expected
+
+
 @pytest.fixture
 def clean_env(tmp_path, monkeypatch):
     """Empty working dir (no .env) and no key variables."""

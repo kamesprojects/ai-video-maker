@@ -3,8 +3,10 @@
 import math
 import os
 import struct
+import subprocess
 from pathlib import Path
 
+import imageio_ffmpeg
 from dotenv import load_dotenv
 from mutagen.mp4 import MP4
 
@@ -70,6 +72,82 @@ def closest_aspect_ratio(size, ratios: list[str]) -> str:
         return abs(math.log(w / h) - math.log(int(rw) / int(rh)))
 
     return min(ratios, key=distance)
+
+
+MAX_SIDE_PX = 1280   # longer side of the uploaded video
+
+# Scale so the longer side is at most MAX_SIDE_PX (never upscale), keep ratio
+SCALE_FILTER = (
+    f"scale='if(gte(iw,ih),min({MAX_SIDE_PX},iw),-2)'"
+    f":'if(gte(iw,ih),-2,min({MAX_SIDE_PX},ih))'"
+)
+
+
+def file_size_mb(path: Path) -> float:
+    return path.stat().st_size / 1_000_000
+
+
+def needs_compression(video: Path, max_seconds: int, max_mb: float) -> bool:
+    """True if the video is too long or too big to upload as is."""
+    return video_duration(video) > max_seconds or file_size_mb(video) > max_mb
+
+
+def has_audio(video: Path) -> bool:
+    """True if the video has an audio track."""
+    command = [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", str(video)]
+    info = subprocess.run(command, capture_output=True, text=True).stderr
+    return "Audio:" in info
+
+
+def compress_video(video: Path, max_seconds: int, out_dir: Path, audio: bool = True) -> Path:
+    """Re-encode the first `max_seconds` to a small H.264 MP4 in out_dir."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output = out_dir / f"{video.stem}_upload{'' if audio else '_muted'}.mp4"
+    audio_args = ["-map", "0:a?", "-c:a", "aac", "-b:a", "128k"] if audio else ["-an"]
+    run_ffmpeg([
+        "-i", str(video), "-t", str(max_seconds),
+        "-map", "0:v:0",                    # first video track
+        *audio_args,                        # + audio if present, or no audio
+        "-vf", SCALE_FILTER,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(output),
+    ])
+    return output
+
+
+def run_ffmpeg(args: list[str]):
+    """Run the bundled ffmpeg; exit with its error message on failure."""
+    command = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", *args]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(f"ffmpeg failed: {result.stderr.strip()}")
+
+
+def prepare_video(video: Path, max_seconds: int, max_mb: float, out_dir: Path,
+                  audio: bool = True) -> Path:
+    """Return the video as is, or a trimmed / compressed / muted copy if it needs it.
+
+    The original file is never changed.
+    """
+    if audio and not needs_compression(video, max_seconds, max_mb):
+        return video
+    print(f"Preparing {video.name} for upload{'' if audio else ' (without audio)'} ...")
+    output = compress_video(video, max_seconds, out_dir, audio)
+    print(f"Compressed: {file_size_mb(video):.1f} MB -> {file_size_mb(output):.1f} MB")
+    return output
+
+
+COMMON_ASPECT_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
+
+
+def describe_size(size) -> str:
+    """Human-readable size, orientation and ratio, e.g. "1080x1920, vertical, ~9:16"."""
+    if not size:
+        return "unknown size"
+    w, h = size
+    orientation = "horizontal" if w > h else "vertical" if h > w else "square"
+    return f"{w}x{h}, {orientation}, ~{closest_aspect_ratio(size, COMMON_ASPECT_RATIOS)}"
 
 
 def load_api_key():

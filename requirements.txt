@@ -1,3 +1,4 @@
 higgsfield-client==0.2.0
 python-dotenv==1.2.4
 mutagen==1.48.1
+imageio-ffmpeg==0.6.0
