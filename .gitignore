@@ -1,0 +1,30 @@
+# Secrets (API key)
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Media: inputs and outputs stay local, only the folder structure is committed
+media/**
+!media/**/
+!media/**/.gitkeep
+*.mp4
+*.mov
+*.m4v
+*.zip
+zips/
+/*.jpg
+/*.jpeg
+/*.png
+/*.webp
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
