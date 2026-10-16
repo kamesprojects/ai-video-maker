@@ -99,8 +99,21 @@ The zip is saved to `zips/media_<date>.zip`. The `zips/` folder is ignored by gi
 | `generation/` | the generation itself: upload, request, wait, download |
 | `utils.py` | shared helpers (files, video duration and size, API key) |
 | `zip_media.py` | packs `media/in` + `media/out` into one zip in `zips/` |
+| `test/` | tests (`doubles.py` = shared fakes/stubs) and `test/docs/` = test documentation per issue |
 
 Everything inside `media/` (your photos and videos) stays local and is not committed. Only the empty folder structure is in the repo.
+
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt   # once
+.\.venv\Scripts\python.exe -m pytest -v
+```
+Tests use test doubles and never call the real API or bill credits. Test documentation is in [`test/docs/`](test/docs/).
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the rules (AI use, tests, changelog), [`VISION.md`](VISION.md) for where the project is going and [`CHANGELOG.md`](CHANGELOG.md) for what changed.
 
 ## Adding a new model
 

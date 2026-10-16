@@ -8,6 +8,7 @@
 venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 # Media: inputs and outputs stay local, only the folder structure is committed
 media/**
