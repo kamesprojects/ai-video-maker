@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from choices import ModelName
 from models.base import Model
 from utils import closest_aspect_ratio, video_size
 
@@ -7,7 +8,7 @@ from utils import closest_aspect_ratio, video_size
 class Seedance(Model):
     """ByteDance Seedance 2.5 – reference-to-video."""
 
-    name = "seedance"
+    name = ModelName.SEEDANCE
     endpoint = "bytedance/seedance-2.5/reference-to-video"
     min_seconds, max_seconds = 4, 30
     aspect_ratios = ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]  # no "adaptive"

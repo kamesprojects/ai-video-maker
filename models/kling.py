@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from choices import ModelName
 from models.base import Model
 
 
@@ -11,7 +12,7 @@ class Kling(Model):
     no duration, resolution or audio – only a quality "mode".
     """
 
-    name = "kling"
+    name = ModelName.KLING
     endpoint = "kling-video/o3/video-edit"
     quality = {"480p": "std", "720p": "std", "1080p": "pro"}
 

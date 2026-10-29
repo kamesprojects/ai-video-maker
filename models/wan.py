@@ -1,12 +1,13 @@
 from pathlib import Path
 
+from choices import ModelName
 from models.base import Model
 
 
 class Wan(Model):
     """Alibaba Wan 3.0 – reference-to-video."""
 
-    name = "wan"
+    name = ModelName.WAN
     endpoint = "alibaba/wan-3.0/reference-to-video"
     min_seconds, max_seconds = 2, 30
 

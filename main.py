@@ -10,13 +10,17 @@ Settings: config.example.py (defaults) and your config.py. Prompts: prompt.py. S
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
 import settings
+from choices import Key, ModelName, PromptName, Resolution
 from generation import generate
-from models import Kling, Seedance, Wan
-from prompt import get_prompt, prompt_names
+from generation.record import (NOT_CHARGED, cost_dict, estimate, new_record, now,
+                               planned_estimate, save_record, video_info)
+from models import GenjutsuLight, Kling, Seedance, Wan
+from prompt import get_prompt
 from utils import (IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, describe_size, file_size_mb,
                    has_audio, list_files, needs_compression, prepare_video,
                    select_file, video_duration, video_size)
@@ -32,12 +36,12 @@ IN_IMAGES = settings.IN_IMAGES_DIR
 OUT = settings.OUT_DIR
 TMP = settings.TMP_DIR
 
-MODELS = {
-    "wan": Wan(audio=settings.GENERATE_AUDIO, max_duration=MAX_DURATION),
-    "seedance": Seedance(audio=settings.GENERATE_AUDIO, max_duration=MAX_DURATION),
-    "kling": Kling(),
-}
-RESOLUTIONS = ["480p", "720p", "1080p"]
+MODELS = {m.name: m for m in [
+    Wan(audio=settings.GENERATE_AUDIO, max_duration=MAX_DURATION),
+    Seedance(audio=settings.GENERATE_AUDIO, max_duration=MAX_DURATION),
+    Kling(),
+    GenjutsuLight(),
+]}
 
 
 FLAGS = ["--test", "--mute"]
@@ -66,8 +70,8 @@ Arguments can be in any order. Anything you leave out uses the default from conf
 (or config.example.py).
 
   model           {options(MODELS, DEFAULT_MODEL)}
-  resolution      {options(RESOLUTIONS, DEFAULT_RESOLUTION)}
-  prompt          {options(prompt_names(), DEFAULT_PROMPT)}
+  resolution      {options(Resolution, DEFAULT_RESOLUTION)}
+  prompt          {options(PromptName, DEFAULT_PROMPT)}
                   (edit in prompt.py; tmp-prompt = text in {settings.TMP_PROMPT_FILE.as_posix()})
 
   --video NAME    which video from {IN_VIDEO.as_posix()}/ to use
@@ -120,19 +124,22 @@ def parse_args(argv: list[str]) -> Args:
     mute = "--mute" in args or settings.MUTE_REFERENCE_VIDEO
     args = [a for a in args if a not in FLAGS]
 
-    unknown = [a for a in args if a not in MODELS and a not in RESOLUTIONS and a not in prompt_names()]
+    unknown = [a for a in args if a not in MODELS and a not in list(Resolution) and a not in list(PromptName)]
     if unknown:
         raise SystemExit(
             f"Unknown argument: {', '.join(unknown)}. Models: {', '.join(MODELS)} | "
-            f"resolutions: {', '.join(RESOLUTIONS)} | prompts: {', '.join(prompt_names())}\n"
+            f"resolutions: {', '.join(Resolution)} | prompts: {', '.join(PromptName)}\n"
             f"Run python main.py --help for usage."
         )
 
     def pick(options, default):
         return next((a for a in args if a in options), default)
 
-    return Args(pick(MODELS, DEFAULT_MODEL), pick(RESOLUTIONS, DEFAULT_RESOLUTION),
-                pick(prompt_names(), DEFAULT_PROMPT), test, mute,
+    return Args(parse_key(ModelName, pick(MODELS, DEFAULT_MODEL), "DEFAULT_MODEL"),
+                parse_key(Resolution, pick(list(Resolution), DEFAULT_RESOLUTION),
+                          "DEFAULT_RESOLUTION"),
+                parse_key(PromptName, pick(list(PromptName), DEFAULT_PROMPT), "DEFAULT_PROMPT"),
+                test, mute,
                 values.get("--video") or settings.REFERENCE_VIDEO,
                 name_list(values.get("--images") or settings.REFERENCE_IMAGES))
 
@@ -143,6 +150,21 @@ def name_list(names: str | list[str] | None) -> list[str] | None:
         names = names.split(",")
     cleaned = [n.strip() for n in names or [] if n.strip()]
     return cleaned or None
+
+
+def parse_key(keys: type[Key], value, setting: str) -> Key:
+    """"wan" or ModelName.WAN -> ModelName.WAN; exit with the options if unknown."""
+    try:
+        return keys(value)
+    except ValueError:
+        raise SystemExit(f"Unknown {keys.__name__} '{value}' (check {setting} in config.py). "
+                         f"Options: {', '.join(keys)}")
+
+
+def check_images(model, images: list[Path]):
+    if model.max_images and len(images) > model.max_images:
+        raise SystemExit(f"{model.name} accepts at most {model.max_images} images "
+                         f"(got {len(images)}). Choose them with --images.")
 
 
 def find_video(name: str | None) -> Path:
@@ -179,17 +201,52 @@ def preview(text: str, length: int = 70) -> str:
     return one_line if len(one_line) <= length else one_line[:length] + "..."
 
 
-def print_summary(args: Args, model, prompt_text, video, images, model_settings):
+def print_summary(args: Args, model, prompt_text, video, images, model_settings, cost):
+    print(f"Config:     {settings.SOURCE}")
     print(f"Model:      {args.model} ({model.endpoint})")
     print(f"Prompt:     {args.prompt}: {preview(prompt_text)}")
     print(f"Video:      {video.name} ({video_duration(video):.1f} s, {file_size_mb(video):.1f} MB, "
           f"{describe_size(video_size(video))})")
     print(f"Audio:      {audio_summary(video, args.mute)}")
-    if args.mute or needs_compression(video, MAX_DURATION, MAX_UPLOAD_MB):
-        print(f"Upload:     prepared copy in {TMP.as_posix()}/, max {MAX_DURATION} s, H.264")
+    seconds = model.upload_seconds(MAX_DURATION)
+    if args.mute or needs_compression(video, seconds, MAX_UPLOAD_MB):
+        print(f"Upload:     prepared copy in {TMP.as_posix()}/, max {seconds} s, H.264")
     print(f"Parameters: {model_settings}")
     for i, f in enumerate(images, 1):
         print(f"Image {i}:    {f.name}")
+    print(f"Est. cost:  {cost}")
+
+
+def output_stem(args: Args) -> Path:
+    """media/out/<model>_<resolution>_<prompt>[_muted]_<date>; the .mp4 and .json share it."""
+    muted = "_muted" if args.mute else ""
+    return OUT / f"{args.model}_{args.resolution}_{args.prompt}{muted}_{datetime.now():%Y%m%d_%H%M%S}"
+
+
+def run(args: Args, model, prompt_text, video, images, model_settings, planned):
+    """The PAID part: prepare, generate, and save a JSON record (also on failure)."""
+    stem = output_stem(args)
+    record = new_record(args, model, prompt_text, video, images, model_settings, planned)
+    try:
+        upload = prepare_video(video, model.upload_seconds(MAX_DURATION), MAX_UPLOAD_MB, TMP,
+                               audio=not args.mute)
+        record["input"]["uploaded_video"] = video_info(upload)
+        output = generate(model, prompt_text, upload, images, model_settings,
+                          stem.with_suffix(".mp4"), record)
+    except (SystemExit, Exception) as error:
+        if record["status"] in ("started", "queued", "inprogress"):
+            record["status"] = "error"
+        record.update(error=str(error), finished_at=now(), cost=cost_dict(NOT_CHARGED))
+        save_record(stem.with_suffix(".json"), record)
+        raise
+
+    record["output"] = video_info(output)
+    cost = estimate(args.model, str(args.resolution), model_settings, video,
+                    record["output"]["seconds"], record["input"]["uploaded_video"]["seconds"])
+    record.update(status="completed", finished_at=now(), cost=cost_dict(cost))
+    print(f"Output:     {record['output']['seconds']} s, {record['output']['resolution']}")
+    print(f"Est. cost:  {cost}")
+    save_record(stem.with_suffix(".json"), record)
 
 
 def main():
@@ -197,16 +254,15 @@ def main():
     model = MODELS[args.model]
     prompt_text = get_prompt(args.prompt)
     video, images = find_video(args.video), find_images(args.images)
-    model_settings = model.settings(video, args.resolution)
+    check_images(model, images)
+    model_settings = model.settings(video, str(args.resolution))
+    planned = planned_estimate(model, str(args.resolution), model_settings, video)
 
-    print_summary(args, model, prompt_text, video, images, model_settings)
+    print_summary(args, model, prompt_text, video, images, model_settings, planned)
     if args.test:
         print("\n--test: nothing was uploaded or generated.")
         return
-
-    video = prepare_video(video, MAX_DURATION, MAX_UPLOAD_MB, TMP, audio=not args.mute)
-    generate(model, prompt_text, video, images, model_settings, OUT,
-             f"{args.model}_{args.resolution}_{args.prompt}{'_muted' if args.mute else ''}")
+    run(args, model, prompt_text, video, images, model_settings, planned)
 
 
 if __name__ == "__main__":

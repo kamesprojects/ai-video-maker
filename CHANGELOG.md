@@ -18,8 +18,14 @@ Every entry references its issue number, e.g. `(#1)`.
 - `--video NAME` and `--images A,B`: choose the reference video and images (and their order) per run; names match by full name, name without extension or a unique part. Several videos can now live in the input folder.
 - `config.py`: one place for all hand-editable settings (reference video/images, default model/resolution/prompt, audio, limits, timeout, folders). Command-line arguments override it per run. `DEFAULT_PROMPT` moved here from `prompt.py`.
 - `tmp-prompt`: a prompt read from `prompts/tmp-prompt.txt` (plain text, not in git; template `prompts/tmp-prompt.example.txt`). `--test` shows the start of every prompt.
+- Genjutsu Light object swap (`genjutsu-light`, `higgsfield/genjutsu-light/object-swap/v1.0`): one `video_url`, 1–8 images, only the first 15 s are uploaded. API docs saved in `docs/api/`.
+- `choices.py` with `ModelName`, `Resolution` and `PromptName`: everything you can choose as objects; in the config `DEFAULT_MODEL = ModelName.WAN`, `DEFAULT_RESOLUTION = Resolution.P480` and `DEFAULT_PROMPT = PromptName.ONE_PERSON` (plain text still works). An unknown default exits with the list of options. `PROMPTS` in `prompt.py` is keyed by `PromptName`.
+- Per-model limits: `max_input_seconds` (upload only what the model uses) and `max_images` (checked before upload).
+- `AGENTS.md` and `CLAUDE.md`: rules for AI agents, above all never to run a paid generation, only to write the command for the user.
+- Approximate cost: `pricing.json` (list prices + billing rules per model, with sources) and `pricing.py`. `--test` prints `Est. cost:` before paying; `PRICE_MULTIPLIER` in the config for discounts.
+- JSON record next to every output video (same name): status, request ID, model, prompt, input/uploaded/output video info, parameters, API response, estimated cost. Also written for failed, NSFW, cancelled and error runs (cost 0).
 - Handling of failed, cancelled and NSFW-moderated generations.
-- `zip_media.py`: packs `media/in` and `media/out` into one zip.
+- `zip_media.py`: packs `media/in` and `media/out` into one zip; `--repo` packs only the files git would push (no ignored files, secrets or media).
 - Test suite in `test/` with test doubles (fake Higgsfield client, fake MP4) and docs in `test/docs/`.
 - `README.md`, `VISION.md`, `CONTRIBUTING.md`, `.env.example`.
 
@@ -27,5 +33,7 @@ Every entry references its issue number, e.g. `(#1)`.
 - `config.py` is now personal and ignored by git. Defaults live in `config.example.py` (committed); `settings.py` merges both, so `config.py` is optional and may contain only changed values.
 
 ### Fixed
+- NSFW / failed / cancelled runs now print the reason sent by the API (e.g. "may depict a real person") and say that nothing was charged.
+- Confusing config: `--test` now prints a `Config:` line with the file the settings come from, and `config.example.py` says clearly not to edit it (values in `config.py` always win).
 - `REFERENCE_IMAGES = "name.png"` (text instead of a list) in `config.py` was read letter by letter. Text and comma-separated text now work as well as a list.
 - Upload of large videos failed with `httpx.WriteTimeout`: the SDK's 90 s timeout is raised to 600 s and videos are compressed before upload.

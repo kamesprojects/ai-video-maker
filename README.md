@@ -84,7 +84,7 @@ Arguments can be in any order. Anything you leave out uses the default.
 
 A generation takes a few minutes. The script prints the status (`Queued` → `InProgress` → `Completed`) and saves the video to `media/out/` at the end. If the API rejects it (NSFW), cancels it, or it fails, the script says so and exits.
 
-- **Model:** `wan` (default), `seedance`, `kling`
+- **Model:** `wan` (default), `seedance`, `kling`, `genjutsu-light`
 - **Resolution:** `480p` (default), `720p`, `1080p`
 - **Prompt:** `one-person` (default), `four-people` (see [Prompts](#prompts))
 - **`--mute`:** upload the reference video **without sound**. Only the uploaded copy in `media/tmp/` is muted, your original in `media/in/` keeps its audio. Without `--mute` the sound is sent along. `--test` shows which one will happen (`Audio:` line). Muted runs get `_muted` in the output file name.
@@ -92,6 +92,8 @@ A generation takes a few minutes. The script prints the status (`Queued` → `In
 - **Duration:** automatic, from the reference video (rounded to whole seconds), max 20 s.
 - **Long or big videos:** a reference video longer than 20 s or bigger than 10 MB is automatically trimmed to its first 20 s and compressed (H.264, max 1280 px) before upload, e.g. 100 MB → 3 MB. The copy goes to `media/tmp/`, the original is not changed. `--test` shows when this will happen.
 - **Aspect ratio:** automatic, from the video.
+
+**Genjutsu Light:** Higgsfield's own **object swap** model (`higgsfield/genjutsu-light/object-swap/v1.0`, docs in [`docs/api/`](docs/api/genjutsu-light-object-swap.md)). It replaces characters, objects or clothes in the video with the ones from the images (1–8 images), keeps the video's audio and length. It uses only the first 15 s, so the script uploads at most 15 s. ⚠️ It is billed per second of **output + input video** (480p $0.05/s, 720p $0.10/s, 1080p $0.20/s), so a 15 s video costs about 30 billed seconds.
 
 **Kling:** Kling 3.0 has no reference-to-video, so the project uses **Kling O3 Video Edit**. It edits the input video, so the output has the same length as the (trimmed) input. Instead of a resolution it has a quality mode: `480p`/`720p` = `std`, `1080p` = `pro`. No audio.
 
@@ -107,15 +109,16 @@ Available settings:
 |---|---|---|
 | `REFERENCE_VIDEO` | `None` | which video to use (`None` = the only one in the folder) |
 | `REFERENCE_IMAGES` | `None` | which images, in order: a list `["gazi", "kristian"]` or text `"gazi"` / `"gazi, kristian"` (`None` = all, sorted by name) |
-| `DEFAULT_MODEL` | `"wan"` | `wan`, `seedance`, `kling` |
-| `DEFAULT_RESOLUTION` | `"480p"` | `480p`, `720p`, `1080p` |
-| `DEFAULT_PROMPT` | `"one-person"` | a key from `PROMPTS` in `prompt.py`, or `"tmp-prompt"` |
+| `DEFAULT_MODEL` | `ModelName.WAN` | `ModelName.WAN` / `SEEDANCE` / `KLING` / `GENJUTSU_LIGHT` (from `choices.py`; plain text like `"wan"` also works) |
+| `DEFAULT_RESOLUTION` | `Resolution.P480` | `Resolution.P480` / `P720` / `P1080` (from `choices.py`; plain text also works) |
+| `DEFAULT_PROMPT` | `PromptName.ONE_PERSON` | `PromptName.ONE_PERSON` / `FOUR_PEOPLE` / `TMP_PROMPT` (from `choices.py`; plain text also works) |
 | `GENERATE_AUDIO` | `False` | the model generates sound for the output (wan, seedance) |
 | `MUTE_REFERENCE_VIDEO` | `False` | upload the reference video without sound (same as `--mute`) |
 | `MAX_DURATION` | `20` | seconds; longer reference videos are trimmed, also the output length |
 | `MAX_UPLOAD_MB` | `10` | bigger reference videos are compressed before upload |
 | `MAX_SIDE_PX` | `1280` | longer side of the uploaded video |
 | `TIMEOUT_S` | `600` | upload / API timeout in seconds |
+| `PRICE_MULTIPLIER` | `1.0` | applied to cost estimates, e.g. `0.8` if you have a 20 % discount |
 | `TMP_PROMPT_FILE` | `prompts/tmp-prompt.txt` | text file used by the `tmp-prompt` prompt |
 | `IN_VIDEO_DIR`, `IN_IMAGES_DIR`, `OUT_DIR`, `TMP_DIR` | `media/...` | input, output and temp folders |
 
@@ -160,15 +163,49 @@ Tips for good results:
 ```
 The file is ignored by git; `prompts/tmp-prompt.example.txt` is the committed template. To use it by default, set `DEFAULT_PROMPT = "tmp-prompt"` in `config.py`. If the file is missing or empty, the script stops instead of sending an empty prompt.
 
-**Adding your own prompt:** add a new entry to `PROMPTS` in `prompt.py`, e.g. `"two-people": """..."""`. The key is the name you type on the command line. It must not clash with a model or resolution name (a test checks this). Refer to the inputs as "Video 1" and "Image 1", "Image 2"… To change the default, set `DEFAULT_PROMPT` in `config.py`.
+**Adding your own prompt:**
+1. Add a key to `PromptName` in [`choices.py`](choices.py), e.g. `BOXING = "boxing"`. The value is the name you type on the command line; it must not clash with a model or resolution name (a test checks this).
+2. Add its text to `PROMPTS` in `prompt.py`: `PromptName.BOXING: """..."""`. Refer to the inputs as "Video 1" and "Image 1", "Image 2"… (the model doesn't see file names).
+3. Run it with `python main.py boxing`, or set `DEFAULT_PROMPT = PromptName.BOXING` in `config.py`.
 
-## Zip inputs and outputs
+A test checks that every `PromptName` has a text (except `TMP_PROMPT`, which comes from the file).
 
-Packs `media/in` and `media/out` into one zip (with `in/` and `out/` folders inside), e.g. for sharing or backup:
-```powershell
-.\.venv\Scripts\python.exe zip_media.py
+## Cost estimate and JSON record
+
+**Before paying:** `--test` prints an approximate cost, e.g.
 ```
-The zip is saved to `zips/media_<date>.zip`. The `zips/` folder is ignored by git.
+Est. cost:  ~$2.10 (11.0 s output + 10.0 s input x $0.1/s)
+```
+
+**After a run:** next to every video in `media/out/` a JSON file with the same name is saved, e.g. `genjutsu-light_720p_tmp-prompt_20261029_143000.mp4` + `.json`. It contains:
+- `status`, `request_id`, start and finish time
+- model and endpoint, prompt name and full text
+- input video (original and uploaded copy: seconds, MB, resolution), images in order, muted or not
+- parameters sent to the API, uploaded URLs and the API response
+- output video (seconds, MB, resolution)
+- `estimated_cost_before` (from `--test`) and `cost` (with the real output length)
+
+A JSON is written **also when a generation fails** (status `failed` / `nsfw` / `cancelled` / `error`, with the error and cost `0`, because Higgsfield doesn't charge those).
+
+**Prices** come from [`pricing.json`](pricing.json): list prices from the Higgsfield model docs (with the source link and the date they were checked). The API itself doesn't return a cost, so every number is **approximate** and before discounts; set `PRICE_MULTIPLIER` in `config.py` for a discount. Kling O3 has no public price, so its cost is shown as unknown. Exact charges are in the [Higgsfield console](https://console.higgsfield.ai).
+
+| Model | Billing |
+|---|---|
+| `wan`, `genjutsu-light` | (output + input video seconds) × 480p $0.05 / 720p $0.10 / 1080p $0.20 per second |
+| `seedance` | video tokens = width × height × (output + input seconds) × 24 / 1024, × $0.01284 (480p/720p) or $0.01404 (1080p) per 1000 |
+| `kling` | no public price |
+
+## Zip files
+
+```powershell
+.\.venv\Scripts\python.exe zip_media.py          # media/in + media/out  -> zips/media_<date>.zip
+.\.venv\Scripts\python.exe zip_media.py --repo   # what git would push   -> zips/repo_<date>.zip
+```
+
+- **Without a flag:** packs `media/in` and `media/out` (with `in/` and `out/` folders inside), e.g. for sharing results or a backup. `.gitkeep` files are skipped.
+- **`--repo`:** packs exactly the files git would commit and push: tracked files plus new ones, **without** anything in `.gitignore`. So no `.env`, `config.py`, `prompts/tmp-prompt.txt`, `.venv/`, media or zips. Useful for sending the project to someone without GitHub. Uses `git ls-files`, so git must be installed.
+
+The `zips/` folder is ignored by git.
 
 ## Folders
 
@@ -183,10 +220,14 @@ The zip is saved to `zips/media_<date>.zip`. The `zips/` folder is ignored by gi
 | `config.py` | **your settings** (not in git), see [Configuration](#configuration-configpy) |
 | `settings.py` | merges `config.example.py` + `config.py`; the code reads settings from here |
 | `main.py` | the entry point (command line, summary, run) |
-| `models/` | one class per model (`wan.py`, `seedance.py`, `kling.py`) defining its API parameters |
+| `models/` | one class per model (`wan.py`, `seedance.py`, `kling.py`, `genjutsu.py`) defining its API parameters |
+| `choices.py` | `ModelName`, `Resolution`, `PromptName`: everything you can choose, used in `config.py` |
+| `docs/api/` | copies of the Higgsfield API docs for our models |
+| `AGENTS.md`, `CLAUDE.md` | rules for AI coding agents (e.g. never run a paid generation) |
 | `generation/` | the generation itself: upload, request, wait, download |
 | `utils.py` | shared helpers (files, video duration and size, API key) |
-| `zip_media.py` | packs `media/in` + `media/out` into one zip in `zips/` |
+| `pricing.json`, `pricing.py` | model prices and the cost estimate |
+| `zip_media.py` | zips `media/in` + `media/out`, or with `--repo` the files git would push, into `zips/` |
 | `test/` | tests (`doubles.py` = shared fakes/stubs) and `test/docs/` = test documentation per issue |
 
 Everything inside `media/` (your photos and videos) stays local and is not committed. Only the empty folder structure is in the repo.
@@ -201,10 +242,14 @@ Tests use test doubles and never call the real API or bill credits. Test documen
 
 ## Contributing
 
+AI agents: read [`AGENTS.md`](AGENTS.md) first.
+
+
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the rules (AI use, tests, changelog), [`VISION.md`](VISION.md) for where the project is going and [`CHANGELOG.md`](CHANGELOG.md) for what changed.
 
 ## Adding a new model
 
-1. Create `models/new_model.py` with a class that inherits from `Model` and sets `endpoint` and `settings()`.
-2. Add it to `models/__init__.py`.
-3. Add it to `MODELS` in `main.py`.
+1. Add its key to `ModelName` in `choices.py`.
+2. Create `models/new_model.py` with a class that inherits from `Model` and sets `name`, `endpoint` and `settings()` (override `arguments()` if the API uses different field names).
+3. Add it to `models/__init__.py` and to the `MODELS` list in `main.py`.
+4. Save its API docs to `docs/api/`.

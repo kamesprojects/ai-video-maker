@@ -91,6 +91,46 @@
 - **Why:** these field names are what the Higgsfield API expects.
 - **Test double:** none.
 
+### `test_genjutsu_sends_a_single_video_url_and_no_extra_fields`
+- **What it checks:** Genjutsu gets exactly `prompt`, `video_url` (one URL, not a list), `image_urls` and `resolution`.
+- **Why:** these are the documented fields (`docs/api/genjutsu-light-object-swap.md`); the other models use `video_urls`.
+- **Test double:** none.
+
+### `test_genjutsu_settings_only_resolution`
+- **What it checks:** the only model setting is `resolution` (no duration, aspect ratio or audio).
+- **Why:** output length follows the video; other fields are not in the schema.
+- **Test double:** none.
+
+### `test_genjutsu_uses_the_object_swap_endpoint`
+- **What it checks:** the endpoint is `higgsfield/genjutsu-light/object-swap/v1.0`.
+- **Why:** object swap replaces people in the video; motion transfer is a different endpoint.
+- **Test double:** none.
+
+### `test_upload_seconds` (2 cases)
+- **What it checks:** Genjutsu uploads at most 15 s; a model without its own limit uses `MAX_DURATION`.
+- **Why:** Genjutsu bills the input video seconds too, but only uses the first 15 s.
+- **Test double:** none.
+
+### `test_every_model_name_has_a_model`
+- **What it checks:** every `ModelName` member has a model in `main.MODELS` and vice versa.
+- **Why:** a name without a class (or the other way round) would crash at run time.
+- **Test double:** none.
+
+### `test_model_name_accepts_member_or_text` (3 cases), `test_unknown_model_name_exits`
+- **What they check:** `parse_key(ModelName, …)` accepts `ModelName.KLING` and `"kling"`; an unknown name exits naming the config setting and the options.
+- **Why:** older configs use text; a typo in `DEFAULT_MODEL` must not crash with a `KeyError`.
+- **Test double:** none.
+
+### `test_model_name_prints_as_its_value`
+- **What it checks:** `ModelName.GENJUTSU_LIGHT` prints as `genjutsu-light` and equals `"wan"`-style text.
+- **Why:** names appear in `--help`, `--test` and output file names.
+- **Test double:** none.
+
+### `test_too_many_images_for_genjutsu_exits`
+- **What it checks:** 9 images for Genjutsu exit with "at most 8 images" before anything is uploaded.
+- **Why:** the API accepts 1–8 images.
+- **Test double:** none (plain `Path` objects).
+
 ## `test/test_generation.py`
 
 ### `test_completed_uploads_sends_and_downloads`
@@ -98,15 +138,25 @@
 - **Why:** the full happy path without spending credits.
 - **Test double:** fake — `fake_higgsfield()` replaces the SDK; spy — records uploads, the request and downloads; stub — `load_api_key` does nothing.
 
+### `test_record_gets_request_id_status_and_urls`
+- **What it checks:** `generate()` fills the record with the request ID, the final status, the uploaded URLs and the API response.
+- **Why:** these values end up in the JSON next to the video.
+- **Test double:** fake Higgsfield client; the record is a plain dict.
+
 ### `test_client_uses_long_timeout_for_uploads`
 - **What it checks:** the SDK client is created with `TIMEOUT_S` (600 s), not the default 90 s.
 - **Why:** with 90 s, a video upload on a slow connection failed with `httpx.WriteTimeout`.
 - **Test double:** fake — `fake_higgsfield().SyncClient` records the timeout.
 
 ### `test_unsuccessful_status_exits_without_download` (NSFW, Cancelled, Failed)
-- **What it checks:** each unsuccessful status exits with a matching message and does not claim success.
+- **What it checks:** each unsuccessful status exits with a matching message, does not claim success, and the record keeps the status (`nsfw`, `cancelled`, `failed`).
 - **Why:** the SDK does not raise on these statuses, so the code has to check them itself.
 - **Test double:** same fake client, replaying the given statuses.
+
+### `test_api_reason_is_shown`
+- **What it checks:** when the API sends an `error` (e.g. "may depict a real person"), the exit message includes it.
+- **Why:** NSFW / failed responses often carry the real reason; a generic "NSFW" hid it.
+- **Test double:** fake Higgsfield client returning an NSFW status with an error text.
 
 ### `test_missing_video_url_exits`
 - **What it checks:** a completed response without a video URL → clean exit.
@@ -216,8 +266,33 @@ Command-line arguments and prompt selection.
 - **Why:** the user sees in `--test` exactly what will be uploaded before paying.
 - **Test double:** stub — `has_audio` returns a fixed answer.
 
+### `test_every_prompt_name_has_a_text`
+- **What it checks:** every `PromptName` has a text in `PROMPTS`, except `TMP_PROMPT`, which must not have one.
+- **Why:** a key without a text would crash at run time; `TMP_PROMPT` is always read from its file.
+- **Test double:** none.
+
+### `test_prompt_is_returned_as_prompt_name`
+- **What it checks:** `four-people` on the command line becomes `PromptName.FOUR_PEOPLE`.
+- **Why:** the rest of the code works with keys, not loose text.
+- **Test double:** none.
+
+### `test_unknown_default_prompt_exits`
+- **What it checks:** an unknown `DEFAULT_PROMPT` exits with "Unknown PromptName" and names the setting.
+- **Why:** a typo in `config.py` must give a clear message, not a `KeyError`.
+- **Test double:** stub — `DEFAULT_PROMPT` replaced with `monkeypatch`.
+
+### `test_resolution_is_returned_as_resolution_key`
+- **What it checks:** `1080P` on the command line becomes `Resolution.P1080` (any case).
+- **Why:** resolutions are keys like models and prompts.
+- **Test double:** none.
+
+### `test_unknown_default_resolution_exits`
+- **What it checks:** an unknown `DEFAULT_RESOLUTION` (e.g. `"4k"`) exits naming the setting and the options.
+- **Why:** a typo in `config.py` must give a clear message before anything is uploaded.
+- **Test double:** stub — `DEFAULT_RESOLUTION` replaced with `monkeypatch`.
+
 ### `test_default_prompt_exists`
-- **What it checks:** `DEFAULT_PROMPT` is a key in `PROMPTS`.
+- **What it checks:** `DEFAULT_PROMPT` is a valid `PromptName` (including `TMP_PROMPT`).
 - **Why:** catches renaming a prompt without updating the default.
 - **Test double:** none.
 
@@ -319,6 +394,11 @@ Settings loading (`config.example.py` + personal `config.py`) and the `tmp-promp
 - **Why:** personal file names belong in `config.py`, not in git.
 - **Test double:** none.
 
+### `test_describe_names_config_py_when_it_exists`, `test_describe_warns_when_only_the_example_is_used`
+- **What they check:** the `Config:` line in `--test` says `config.py` when it exists, and warns "no config.py" when only the example is used.
+- **Why:** editing `config.example.py` (or leaving `config.py` unsaved) looked like "the config is ignored"; the summary now shows which file is really used.
+- **Test double:** fake config file in `tmp_path`.
+
 ### `test_tmp_prompt_is_a_selectable_name`
 - **What it checks:** `tmp-prompt` is offered next to the prompts from `PROMPTS`.
 - **Why:** it must work on the command line, in `--help` and in `DEFAULT_PROMPT`.
@@ -343,6 +423,94 @@ Settings loading (`config.example.py` + personal `config.py`) and the `tmp-promp
 - **What it checks:** `prompts/tmp-prompt.example.txt` exists and is not empty.
 - **Why:** the error message tells users to copy it.
 - **Test double:** none.
+
+## `test/test_zip_media.py`
+
+`zip_media.py`: the media zip and `--repo` (only what git would push). The fixture creates a real throwaway git repo in `tmp_path` with ignored files (`config.py`, `.env`, media) next to normal ones.
+
+### `test_repo_files_are_what_git_would_push`
+- **What it checks:** `repo_files()` returns tracked/new files only; `config.py`, `.env` and media are left out, `.gitkeep` is kept.
+- **Why:** the `--repo` zip must never contain secrets or personal files.
+- **Test double:** fake repo — a real `git init` in a temp folder.
+
+### `test_repo_files_skip_tracked_but_deleted`
+- **What it checks:** a file that is tracked but deleted on disk is not listed.
+- **Why:** git still lists it; zipping it would crash.
+- **Test double:** fake repo.
+
+### `test_repo_files_outside_git_exits`
+- **What it checks:** outside a git repo the script exits with a clear message.
+- **Why:** better than a stack trace when the project was copied without `.git`.
+- **Test double:** `GIT_CEILING_DIRECTORIES` stops git from finding a parent repo.
+
+### `test_media_files_skip_gitkeep`
+- **What it checks:** the media zip includes files from `media/in` and `media/out` but not `.gitkeep`.
+- **Why:** `.gitkeep` files are only placeholders for git.
+- **Test double:** fake repo / temp files.
+
+### `test_write_zip_stores_relative_paths`
+- **What it checks:** paths inside the zip are relative (`in/photo.jpg`, `out/result.mp4`).
+- **Why:** the zip unpacks into clean `in/` and `out/` folders.
+- **Test double:** temp files.
+
+### `test_repo_zip_contains_no_secrets_or_media`
+- **What it checks:** end to end, `zip_media.py --repo` creates `zips/repo_*.zip` with code but without `config.py`, `.env` or media.
+- **Why:** the guarantee the user relies on when sharing the zip.
+- **Test double:** fake repo; `sys.argv` set with `monkeypatch`.
+
+## `test/test_pricing.py`
+
+Cost estimates (`pricing.py` + `pricing.json`) and the JSON record written by `main.run()`.
+
+### `test_pricing_has_every_model`, `test_pricing_endpoints_match_the_models`
+- **What they check:** `pricing.json` has an entry for every `ModelName`, with the same endpoint as the model class.
+- **Why:** a new model without a price, or a changed endpoint, would silently give wrong estimates.
+- **Test double:** none (reads the real `pricing.json`).
+
+### `test_wan_bills_output_plus_input_seconds`
+- **What it checks:** Wan 720p, 10 s output + 10 s input = $2.00.
+- **Why:** Wan bills the input reference video seconds too.
+- **Test double:** none.
+
+### `test_genjutsu_rounds_output_up`
+- **What it checks:** 10.2 s output is billed as 11 s; (11 + 10) × $0.05 = $1.05.
+- **Why:** the Genjutsu docs say output is rounded up to whole seconds.
+- **Test double:** none.
+
+### `test_seedance_uses_video_tokens`
+- **What it checks:** 720x1280, 5 s + 5 s = 216,000 tokens × $0.01284 / 1000.
+- **Why:** Seedance bills by video tokens, not seconds.
+- **Test double:** none.
+
+### `test_kling_has_no_public_price`
+- **What it checks:** Kling's estimate is `None` and says the price is not available.
+- **Why:** never show a made-up number.
+- **Test double:** none.
+
+### `test_multiplier_applies_a_discount`
+- **What it checks:** `multiplier=0.8` turns $1.00 into $0.80.
+- **Why:** `PRICE_MULTIPLIER` in the config is for account discounts.
+- **Test double:** none.
+
+### `test_output_size` (3 cases)
+- **What it checks:** resolution + aspect ratio → output width × height (720p 9:16 → 720x1280).
+- **Why:** Seedance tokens depend on the output pixels.
+- **Test double:** none.
+
+### `test_completed_run_writes_json_with_video_and_cost`
+- **What it checks:** after a completed run a JSON with the same name as the video contains status, request ID, output seconds, prompt and the cost ((10 + 10) s × $0.10 = $2.00).
+- **Why:** the record the user asked for.
+- **Test double:** fake `generate()`, `prepare_video()` and `video_info()` — no upload, no ffmpeg, no files.
+
+### `test_failed_run_still_writes_json_with_zero_cost`, `test_failed_run_json_content`
+- **What they check:** a failed / NSFW run still writes the JSON, with the status, the error, cost $0 and no `output`.
+- **Why:** every attempt is recorded; Higgsfield doesn't charge failed requests.
+- **Test double:** fake `generate()` that raises `SystemExit`.
+
+### `test_upload_error_is_recorded_as_error`
+- **What it checks:** an exception during upload is saved with status `error` and re-raised.
+- **Why:** network problems are recorded too, and the user still sees the error.
+- **Test double:** fake `generate()` that raises `ConnectionError`.
 
 ## How to run
 

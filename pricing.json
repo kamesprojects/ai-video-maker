@@ -1,0 +1,40 @@
+{
+  "_about": "List prices from the Higgsfield model docs (before customer discounts), used for approximate cost estimates. Update when Higgsfield changes prices.",
+  "checked": "2026-10-29",
+  "currency": "USD",
+  "models": {
+    "wan": {
+      "endpoint": "alibaba/wan-3.0/reference-to-video",
+      "billing": "per_second",
+      "usd_per_second": {"480p": 0.05, "720p": 0.10, "1080p": 0.20},
+      "bills_input_video": true,
+      "round_output_up": false,
+      "rule": "(output seconds + input video seconds) x price per second",
+      "source": "https://dash.higgsfield.ai/models/alibaba/wan-3.0/reference-to-video/llms.txt"
+    },
+    "seedance": {
+      "endpoint": "bytedance/seedance-2.5/reference-to-video",
+      "billing": "video_tokens",
+      "usd_per_1000_tokens_with_video_input": {"480p": 0.01284, "720p": 0.01284, "1080p": 0.01404},
+      "tokens_per_pixel_second": 0.0234375,
+      "bills_input_video": true,
+      "rule": "ceil(width x height x (input + output seconds) x 24 / 1024) tokens x price per 1000 tokens (video input rate = 0.6 x normal)",
+      "source": "https://dash.higgsfield.ai/models/bytedance/seedance-2.5/reference-to-video/llms.txt"
+    },
+    "kling": {
+      "endpoint": "kling-video/o3/video-edit",
+      "billing": "unknown",
+      "rule": "Public pricing information is not available for this model; check the Higgsfield console.",
+      "source": "https://dash.higgsfield.ai/models/kling-video/o3/video-edit/llms.txt"
+    },
+    "genjutsu-light": {
+      "endpoint": "higgsfield/genjutsu-light/object-swap/v1.0",
+      "billing": "per_second",
+      "usd_per_second": {"480p": 0.05, "720p": 0.10, "1080p": 0.20},
+      "bills_input_video": true,
+      "round_output_up": true,
+      "rule": "(output seconds rounded up + input video seconds) x price per second; source trimmed to 15 s",
+      "source": "https://dash.higgsfield.ai/models/higgsfield/genjutsu-light/object-swap/v1.0/llms.txt"
+    }
+  }
+}

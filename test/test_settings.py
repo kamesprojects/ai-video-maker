@@ -4,6 +4,7 @@ import pytest
 
 import prompt
 import settings
+from choices import PromptName
 
 
 @pytest.fixture
@@ -44,7 +45,7 @@ def test_real_example_defines_everything_the_code_uses():
 
     for name in ["REFERENCE_VIDEO", "REFERENCE_IMAGES", "DEFAULT_MODEL", "DEFAULT_RESOLUTION",
                  "DEFAULT_PROMPT", "GENERATE_AUDIO", "MUTE_REFERENCE_VIDEO", "MAX_DURATION",
-                 "MAX_UPLOAD_MB", "MAX_SIDE_PX", "TIMEOUT_S", "TMP_PROMPT_FILE",
+                 "MAX_UPLOAD_MB", "MAX_SIDE_PX", "TIMEOUT_S", "TMP_PROMPT_FILE", "PRICE_MULTIPLIER",
                  "IN_VIDEO_DIR", "IN_IMAGES_DIR", "OUT_DIR", "TMP_DIR"]:
         assert name in values
 
@@ -57,11 +58,21 @@ def test_real_example_has_neutral_inputs():
     assert values["REFERENCE_IMAGES"] is None
 
 
+def test_describe_names_config_py_when_it_exists(write):
+    user = write("config.py", "X = 1\n")
+
+    assert settings.describe(user).startswith("config.py")
+
+
+def test_describe_warns_when_only_the_example_is_used(tmp_path):
+    assert "no config.py" in settings.describe(tmp_path / "config.py")
+
+
 # --- tmp-prompt ------------------------------------------------------------
 
 def test_tmp_prompt_is_a_selectable_name():
-    assert prompt.TMP_PROMPT in prompt.prompt_names()
-    assert set(prompt.PROMPTS) <= set(prompt.prompt_names())
+    assert PromptName.TMP_PROMPT == "tmp-prompt"
+    assert set(prompt.PROMPTS) <= set(PromptName)
 
 
 def test_tmp_prompt_reads_the_file(tmp_path, monkeypatch):
@@ -69,7 +80,7 @@ def test_tmp_prompt_reads_the_file(tmp_path, monkeypatch):
     path.write_text("  Replace the person in Video 1.\n\n", encoding="utf-8")
     monkeypatch.setattr(settings, "TMP_PROMPT_FILE", path)
 
-    assert prompt.get_prompt("tmp-prompt") == "Replace the person in Video 1."
+    assert prompt.get_prompt(PromptName.TMP_PROMPT) == "Replace the person in Video 1."
 
 
 def test_tmp_prompt_missing_file_exits(tmp_path, monkeypatch):
@@ -89,7 +100,7 @@ def test_tmp_prompt_empty_file_exits(tmp_path, monkeypatch):
 
 
 def test_named_prompt_comes_from_prompts():
-    assert prompt.get_prompt("one-person") == prompt.PROMPTS["one-person"]
+    assert prompt.get_prompt(PromptName.ONE_PERSON) == prompt.PROMPTS[PromptName.ONE_PERSON]
 
 
 def test_tmp_prompt_example_file_exists():

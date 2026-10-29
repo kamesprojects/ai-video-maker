@@ -1,15 +1,17 @@
 """Prompts. The key is the name you type on the command line: python main.py <name>.
 
-Besides PROMPTS there is "tmp-prompt": its text is read from TMP_PROMPT_FILE
+The keys are PromptName members (choices.py). PromptName.TMP_PROMPT has no
+text here: it is read from TMP_PROMPT_FILE
 (prompts/tmp-prompt.txt, not in git) so you can try prompts without editing code.
 The default prompt is DEFAULT_PROMPT in config.py.
 """
 
 import settings
+from choices import PromptName
 
 PROMPTS = {
     # 1 person in the video, 1 or more images of the SAME person (more angles = better match)
-    "one-person": """Use Video 1 as the base. Replace the person in Video 1 with the person
+    PromptName.ONE_PERSON: """Use Video 1 as the base. Replace the person in Video 1 with the person
 from the reference images. Use that image to reproduce that person's exact face, facial features, hairstyle,
 natural skin tone and body type.
 
@@ -28,7 +30,7 @@ photorealistic, with realistic lighting, shadows, skin texture and proportions,
 seamless blending and no flickering or face morphing.""",
 
     # 4 people in the video, 1 image per person (Image 1 = 1st person from the left)
-    "four-people": """Use Video 1 as the base. Replace the four people in Video 1 with the people
+    PromptName.FOUR_PEOPLE: """Use Video 1 as the base. Replace the four people in Video 1 with the people
 from the reference images, ordered from left to right as they appear in Video 1:
 - the 1st person from the left becomes the person from Image 1,
 - the 2nd person from the left becomes the person from Image 2,
@@ -53,17 +55,9 @@ natural and photorealistic, with realistic lighting, shadows, skin texture,
 proportions and seamless blending, with no flickering or face morphing.""",
 }
 
-TMP_PROMPT = "tmp-prompt"
-
-
-def prompt_names() -> list[str]:
-    """Every name that can be used on the command line."""
-    return [*PROMPTS, TMP_PROMPT]
-
-
-def get_prompt(name: str) -> str:
-    """The prompt text; "tmp-prompt" is read from TMP_PROMPT_FILE."""
-    if name != TMP_PROMPT:
+def get_prompt(name: PromptName) -> str:
+    """The prompt text; PromptName.TMP_PROMPT is read from TMP_PROMPT_FILE."""
+    if name != PromptName.TMP_PROMPT:
         return PROMPTS[name]
     path = settings.TMP_PROMPT_FILE
     if not path.exists():

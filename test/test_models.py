@@ -2,9 +2,11 @@ from pathlib import Path
 
 import pytest
 
+import main
 import models.base
 import models.seedance
-from models import Kling, Seedance, Wan
+from models import GenjutsuLight, Kling, Seedance, Wan
+from choices import ModelName
 
 VIDEO = Path("ref.mp4")  # never opened: duration and size are stubbed
 
@@ -70,3 +72,57 @@ def test_arguments_include_prompt_and_urls():
         "prompt": "prompt", "video_urls": ["https://v"],
         "image_urls": ["https://i1"], "mode": "pro",
     }
+
+
+# --- Genjutsu Light --------------------------------------------------------
+
+def test_genjutsu_sends_a_single_video_url_and_no_extra_fields():
+    args = GenjutsuLight().arguments("prompt", "https://v", ["https://i1"], {"resolution": "480p"})
+
+    # exactly the documented fields; video_url is a single URL, not a list
+    assert args == {"prompt": "prompt", "video_url": "https://v",
+                    "image_urls": ["https://i1"], "resolution": "480p"}
+
+
+def test_genjutsu_settings_only_resolution():
+    assert GenjutsuLight().settings(VIDEO, "720p") == {"resolution": "720p"}
+
+
+def test_genjutsu_uses_the_object_swap_endpoint():
+    assert GenjutsuLight().endpoint == "higgsfield/genjutsu-light/object-swap/v1.0"
+
+
+@pytest.mark.parametrize("model, expected", [
+    (GenjutsuLight(), 15),   # only the first 15 s are used, the rest would be billed
+    (Wan(), 20),             # no own limit: MAX_DURATION
+])
+def test_upload_seconds(model, expected):
+    assert model.upload_seconds(20) == expected
+
+
+# --- ModelName ---------------------------------------------------------------
+
+def test_every_model_name_has_a_model():
+    assert set(main.MODELS) == set(ModelName)
+
+
+@pytest.mark.parametrize("value", [ModelName.KLING, "kling", "KLING".lower()])
+def test_model_name_accepts_member_or_text(value):
+    assert main.parse_key(ModelName, value, "DEFAULT_MODEL") is ModelName.KLING
+
+
+def test_unknown_model_name_exits():
+    with pytest.raises(SystemExit, match="Unknown ModelName 'veo'.*DEFAULT_MODEL"):
+        main.parse_key(ModelName, "veo", "DEFAULT_MODEL")
+
+
+def test_model_name_prints_as_its_value():
+    assert f"{ModelName.GENJUTSU_LIGHT}" == "genjutsu-light"
+    assert ModelName.WAN == "wan"
+
+
+def test_too_many_images_for_genjutsu_exits():
+    images = [Path(f"{i}.jpg") for i in range(9)]
+
+    with pytest.raises(SystemExit, match="at most 8 images"):
+        main.check_images(GenjutsuLight(), images)

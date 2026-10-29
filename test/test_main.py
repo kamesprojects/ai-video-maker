@@ -6,7 +6,8 @@ import pytest
 
 import main
 import settings
-from prompt import PROMPTS, prompt_names
+from choices import PromptName, Resolution
+from prompt import PROMPTS
 from settings import DEFAULT_PROMPT
 
 
@@ -43,13 +44,13 @@ def test_arguments_in_any_order_and_case():
     assert result[:4] == ("seedance", "720p", "four-people", True)
 
 
-@pytest.mark.parametrize("prompt_name", list(PROMPTS))
+@pytest.mark.parametrize("prompt_name", list(PromptName))
 def test_every_prompt_can_be_selected(prompt_name):
     assert main.parse_args([prompt_name])[2] == prompt_name
 
 
 def test_unknown_argument_lists_the_options():
-    with pytest.raises(SystemExit, match="prompts: one-person, four-people"):
+    with pytest.raises(SystemExit, match="prompts: one-person, four-people, tmp-prompt"):
         main.parse_args(["two-people"])
 
 
@@ -66,7 +67,7 @@ def test_help_prints_usage_and_exits_ok(flag, capsys):
 def test_help_lists_every_option():
     text = main.help_text()
 
-    for name in [*main.MODELS, *main.RESOLUTIONS, *prompt_names(), *main.FLAGS, "--help"]:
+    for name in [*main.MODELS, *Resolution, *PromptName, *main.FLAGS, "--help"]:
         assert name in text
     assert f"{main.DEFAULT_MODEL} (default)" in text
     assert f"{DEFAULT_PROMPT} (default)" in text
@@ -92,12 +93,13 @@ def test_audio_summary(monkeypatch, has_audio, mute, expected):
 
 
 def test_default_prompt_exists():
-    assert DEFAULT_PROMPT in PROMPTS
+    """Any PromptName is valid, including TMP_PROMPT (its text comes from a file)."""
+    assert DEFAULT_PROMPT in list(PromptName)
 
 
 def test_option_names_do_not_overlap():
     """A name in two lists would make the argument ambiguous."""
-    names = [*main.MODELS, *main.RESOLUTIONS, *prompt_names()]
+    names = [*main.MODELS, *Resolution, *PromptName]
 
     assert len(names) == len(set(names))
 
@@ -109,3 +111,31 @@ def test_prompts_reference_the_inputs(prompt_name):
 
     assert "Video 1" in text
     assert "reference image" in text
+
+
+def test_every_prompt_name_has_a_text():
+    """Every PromptName has a text in PROMPTS, except TMP_PROMPT (read from a file)."""
+    assert set(PROMPTS) | {PromptName.TMP_PROMPT} == set(PromptName)
+    assert PromptName.TMP_PROMPT not in PROMPTS
+
+
+def test_prompt_is_returned_as_prompt_name():
+    assert main.parse_args(["four-people"]).prompt is PromptName.FOUR_PEOPLE
+
+
+def test_unknown_default_prompt_exits(monkeypatch):
+    monkeypatch.setattr(main, "DEFAULT_PROMPT", "boxing")
+
+    with pytest.raises(SystemExit, match="Unknown PromptName 'boxing'.*DEFAULT_PROMPT"):
+        main.parse_args([])
+
+
+def test_resolution_is_returned_as_resolution_key():
+    assert main.parse_args(["1080P"]).resolution is Resolution.P1080
+
+
+def test_unknown_default_resolution_exits(monkeypatch):
+    monkeypatch.setattr(main, "DEFAULT_RESOLUTION", "4k")
+
+    with pytest.raises(SystemExit, match="Unknown Resolution '4k'.*DEFAULT_RESOLUTION"):
+        main.parse_args([])
