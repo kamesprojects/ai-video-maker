@@ -21,21 +21,21 @@ def test_defaults_without_arguments():
 
 def test_config_inputs_are_used_without_arguments(monkeypatch):
     monkeypatch.setattr(settings, "REFERENCE_VIDEO", "football")
-    monkeypatch.setattr(settings, "REFERENCE_IMAGES", ["gazi", "kristian"])
+    monkeypatch.setattr(settings, "REFERENCE_IMAGES", ["anna", "ben"])
     monkeypatch.setattr(settings, "MUTE_REFERENCE_VIDEO", True)
 
     args = main.parse_args([])
 
-    assert (args.video, args.images, args.mute) == ("football", ["gazi", "kristian"], True)
+    assert (args.video, args.images, args.mute) == ("football", ["anna", "ben"], True)
 
 
 def test_command_line_overrides_config(monkeypatch):
     monkeypatch.setattr(settings, "REFERENCE_VIDEO", "football")
-    monkeypatch.setattr(settings, "REFERENCE_IMAGES", ["gazi"])
+    monkeypatch.setattr(settings, "REFERENCE_IMAGES", ["anna"])
 
-    args = main.parse_args(["--video", "song", "--images", "kristian"])
+    args = main.parse_args(["--video", "song", "--images", "ben"])
 
-    assert (args.video, args.images) == ("song", ["kristian"])
+    assert (args.video, args.images) == ("song", ["ben"])
 
 
 def test_arguments_in_any_order_and_case():
@@ -50,7 +50,7 @@ def test_every_prompt_can_be_selected(prompt_name):
 
 
 def test_unknown_argument_lists_the_options():
-    with pytest.raises(SystemExit, match="prompts: one-person, four-people, tmp-prompt"):
+    with pytest.raises(SystemExit, match=f"prompts: {', '.join(PromptName)}"):
         main.parse_args(["two-people"])
 
 

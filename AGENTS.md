@@ -10,10 +10,19 @@ Every real generation through the Higgsfield API **costs money**. Agents must ne
 - **Allowed:** `python main.py ... --test` (uploads and bills nothing), `python main.py --help`, `python -m pytest` (tests use fakes, no network).
 - When a generation is needed, **write the exact command in the chat** and let the user run it, e.g.:
   ```bash
-  python main.py genjutsu-light 480p --video football --images gazi --test   # check first
-  python main.py genjutsu-light 480p --video football --images gazi          # user runs this
+  python main.py genjutsu-light 480p --video dance --images anna --test   # check first
+  python main.py genjutsu-light 480p --video dance --images anna          # user runs this
   ```
 - Read-only API calls that cost nothing (e.g. checking the status of an existing request) are fine, but say what you are doing.
+
+## 🔒 Privacy: nothing personal on GitHub
+
+This repo is public. Nothing from the user's machine or life may end up in a file git pushes:
+
+- **No absolute or local paths**: no `C:\...`, `C:/Users/...`, home folders, school or other project folders. Use relative paths (`media/in/...`) or neutral examples (`D:/other-project/...`).
+- **No personal data**: no real names of people from the user's photos/videos, e-mails or account details. Use neutral names in examples and tests (`anna`, `ben`, `person1`).
+- **Local-only tools stay local**: they go into `.git/info/exclude` (never into `.gitignore`, which is pushed) and are not mentioned in any committed file.
+- **Before finishing a change**, check what git would push: `git ls-files --cached --others --exclude-standard`, and grep those files for paths and names.
 
 ## Secrets and personal files
 

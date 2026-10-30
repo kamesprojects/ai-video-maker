@@ -321,7 +321,7 @@ Choosing the reference video and images with `--video` and `--images`.
 - **Test double:** none.
 
 ### `test_reference_images_in_config_accepts_text_or_list` (5 cases)
-- **What it checks:** `REFERENCE_IMAGES` in `config.py` works as text (`"gazi-kiko.png"`, `"gazi, kristian"`) or a list; empty text or list means "all images".
+- **What it checks:** `REFERENCE_IMAGES` in `config.py` works as text (`"anna-photo.png"`, `"anna, ben"`) or a list; empty text or list means "all images".
 - **Why:** writing a single name as text was read letter by letter (`'g' matches several files`).
 - **Test double:** stub — config value replaced with `monkeypatch`.
 
@@ -346,7 +346,7 @@ Choosing the reference video and images with `--video` and `--images`.
 - **Test double:** none.
 
 ### `test_select_file_exact_name_wins_over_partial`
-- **What it checks:** `kamil` picks `kamil.png`, not `kamil-2.png`.
+- **What it checks:** `carl` picks `carl.png`, not `carl-2.png`.
 - **Why:** an exact name must always be selectable even if it is part of another name.
 - **Test double:** none.
 

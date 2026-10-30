@@ -26,17 +26,17 @@ def media_files() -> list[Path]:
     ]
 
 
-def repo_files() -> list[Path]:
-    """Files git would commit: tracked + new, without anything in .gitignore."""
+def repo_files(root: Path = Path(".")) -> list[Path]:
+    """Files git would commit (relative to `root`): tracked + new, without .gitignore'd ones."""
     try:
         result = subprocess.run(
             ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, check=True, cwd=root,
         )
     except (OSError, subprocess.CalledProcessError) as error:
         raise SystemExit(f"git ls-files failed (is git installed and is this a repo?): {error}")
     # deleted-but-tracked files are still listed by git, skip them
-    return [Path(line) for line in sorted(result.stdout.splitlines()) if Path(line).is_file()]
+    return [Path(line) for line in sorted(result.stdout.splitlines()) if (root / line).is_file()]
 
 
 def write_zip(files: list[Path], output: Path, base: Path = Path(".")) -> Path:

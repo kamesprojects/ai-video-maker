@@ -26,7 +26,7 @@ Returns: the video and the `.json` in `media/out/`.
 
 Uses a specific video and images in this order.
 ```bash
-python main.py --video boxing --images boxer1,boxer2
+python main.py --video boxing --images person1,person2
 ```
 Returns: the video and the `.json` in `media/out/`.
 

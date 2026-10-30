@@ -92,7 +92,7 @@ Examples:
   python main.py seedance 720p --test         check another model and resolution
   python main.py kling 1080p four-people      generate with Kling and the 4-people prompt
   python main.py --mute                       generate, reference video sent without sound
-  python main.py --video song --images kristian,kamil --test
+  python main.py --video song --images ben,carl --test
                                               check a chosen video and 2 images in that order
 
 Without --test every run is a PAID generation. See README.md for details."""

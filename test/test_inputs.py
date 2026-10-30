@@ -49,9 +49,9 @@ def test_video_and_images_default_to_none(monkeypatch):
 
 
 @pytest.mark.parametrize("config_value, expected", [
-    ("gazi-kiko.png", ["gazi-kiko.png"]),          # a single name as text
-    ("gazi, kristian", ["gazi", "kristian"]),      # comma-separated text
-    (["gazi", " kristian "], ["gazi", "kristian"]),
+    ("anna-photo.png", ["anna-photo.png"]),          # a single name as text
+    ("anna, ben", ["anna", "ben"]),      # comma-separated text
+    (["anna", " ben "], ["anna", "ben"]),
     ([], None),                                    # empty = all images
     ("", None),
 ])
@@ -90,9 +90,9 @@ def test_select_file_ambiguous_part_exits():
 
 
 def test_select_file_exact_name_wins_over_partial():
-    files = [Path("kamil.png"), Path("kamil-2.png")]
+    files = [Path("carl.png"), Path("carl-2.png")]
 
-    assert utils.select_file(files, "kamil", Path("in")).name == "kamil.png"
+    assert utils.select_file(files, "carl", Path("in")).name == "carl.png"
 
 
 def test_select_file_unknown_lists_available():
@@ -129,9 +129,9 @@ def test_no_video_exits(folders):
 
 
 def test_all_images_sorted_by_default(folders):
-    folders(images=["kristian.png", "kamil.jpg", "notes.txt"])
+    folders(images=["ben.png", "carl.jpg", "notes.txt"])
 
-    assert [p.name for p in main.find_images(None)] == ["kamil.jpg", "kristian.png"]
+    assert [p.name for p in main.find_images(None)] == ["ben.png", "carl.jpg"]
 
 
 def test_chosen_images_keep_the_given_order(folders):
