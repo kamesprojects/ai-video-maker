@@ -35,6 +35,8 @@ DEFAULT_PROMPT = PromptName.ONE_PERSON   # PromptName.ONE_PERSON / FOUR_PEOPLE /
 GENERATE_AUDIO = False            # the model generates sound for the output (wan, seedance)
 MUTE_REFERENCE_VIDEO = False      # upload the reference video without sound (same as --mute)
 
+RESIZE_TO = Resolution.P480         # default for resize_videos.py (downscaled copies of reference videos)
+
 # ===================== COST =====================
 
 PRICE_MULTIPLIER = 1.0           # cost estimates use list prices (pricing.json); e.g. 0.8 for a 20 % discount

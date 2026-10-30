@@ -22,6 +22,7 @@ from generation.record import (NOT_CHARGED, cost_dict, estimate, new_record, now
 from models import GenjutsuLight, Kling, Seedance, Wan
 from prompt import get_prompt
 from utils import (IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, describe_size, file_size_mb,
+                   find_one_video,
                    has_audio, list_files, needs_compression, prepare_video,
                    select_file, video_duration, video_size)
 
@@ -83,7 +84,7 @@ Arguments can be in any order. Anything you leave out uses the default from conf
                   (the original in media/in is not changed)
   -h, --help      show this help
 
-Output:   {OUT.as_posix()}/<model>_<resolution>_<prompt>_<date>.mp4
+Output:   {OUT.as_posix()}/<model>_<resolution>_<prompt>_<date>.mp4 + .json (info + cost)
 
 Examples:
   python main.py --test                       check the defaults (free)
@@ -169,15 +170,7 @@ def check_images(model, images: list[Path]):
 
 def find_video(name: str | None) -> Path:
     """The video called `name`, or the only video in the folder."""
-    videos = list_files(IN_VIDEO, VIDEO_EXTENSIONS)
-    if name:
-        return select_file(videos, name, IN_VIDEO)
-    if len(videos) == 1:
-        return videos[0]
-    if not videos:
-        raise SystemExit(f"No video in {IN_VIDEO.as_posix()}/.")
-    raise SystemExit(f"{IN_VIDEO.as_posix()}/ has {len(videos)} videos: "
-                     f"{', '.join(v.name for v in videos)}. Choose one with --video NAME.")
+    return find_one_video(IN_VIDEO, name)
 
 
 def find_images(names: list[str] | None) -> list[Path]:

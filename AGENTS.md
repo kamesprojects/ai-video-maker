@@ -36,7 +36,10 @@ Every real generation through the Higgsfield API **costs money**. Agents must ne
 | `pricing.json`, `pricing.py` | list prices per model (from the Higgsfield docs) and the estimate |
 | `prompt.py` | `PROMPTS` + `tmp-prompt` (text from `prompts/tmp-prompt.txt`) |
 | `utils.py` | files, video info, ffmpeg trim/compress/mute, API key loading |
+| `resize_videos.py` | downscaled copies of reference videos (`RESIZE_TO` or a CLI resolution) |
+| `trim_video.py` | cuts parts (START-END seconds) of a reference video into copies |
 | `zip_media.py` | zips media, or with `--repo` what git would push |
+| `COMMANDS.md` | all commands and what they return; update it when commands change |
 | `docs/api/` | copies of Higgsfield API docs for the models we use |
 | `test/` | pytest suite; `test/docs/` documents every test |
 

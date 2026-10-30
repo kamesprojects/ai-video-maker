@@ -130,6 +130,29 @@ def compress_video(video: Path, max_seconds: int, out_dir: Path, audio: bool = T
     return output
 
 
+# Good-quality H.264 + AAC MP4 encoding
+ENCODE_ARGS = [
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart",
+]
+# ... of the first video track and the audio (if any)
+QUALITY_ARGS = ["-map", "0:v:0", "-map", "0:a?", *ENCODE_ARGS]
+
+
+def find_one_video(folder: Path, name: str | None) -> Path:
+    """The video called `name`, or the only video in the folder."""
+    videos = list_files(folder, VIDEO_EXTENSIONS)
+    if name:
+        return select_file(videos, name, folder)
+    if len(videos) == 1:
+        return videos[0]
+    if not videos:
+        raise SystemExit(f"No video in {folder.as_posix()}/.")
+    raise SystemExit(f"{folder.as_posix()}/ has {len(videos)} videos: "
+                     f"{', '.join(v.name for v in videos)}. Choose one with --video NAME.")
+
+
 def run_ffmpeg(args: list[str]):
     """Run the bundled ffmpeg; exit with its error message on failure."""
     command = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", *args]

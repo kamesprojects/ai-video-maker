@@ -512,6 +512,109 @@ Cost estimates (`pricing.py` + `pricing.json`) and the JSON record written by `m
 - **Why:** network problems are recorded too, and the user still sees the error.
 - **Test double:** fake `generate()` that raises `ConnectionError`.
 
+## `test/test_resize_videos.py`
+
+`resize_videos.py`: downscaled copies of reference videos, never upscaled.
+
+### `test_target_size_keeps_ratio_with_even_numbers` (3 cases)
+- **What it checks:** the shorter side becomes the resolution, the ratio is kept, sizes are even (1080x1920 → 480p = 480x854).
+- **Why:** H.264 needs even sizes; vertical videos must stay vertical.
+- **Test double:** none.
+
+### `test_target_size_never_upscales` (3 cases)
+- **What it checks:** videos that are already that small (or smaller) get `None`.
+- **Why:** upscaling only makes files bigger without more detail.
+- **Test double:** none.
+
+### `test_resized_path_and_copy_detection`
+- **What it checks:** `boxing-video.MOV` → `boxing-video_480p.mp4`, and such names are recognized as copies.
+- **Why:** predictable names for `--video`; copies are not resized again.
+- **Test double:** none.
+
+### `test_parse_args` (3 cases), `test_parse_args_errors` (3 cases)
+- **What they check:** no argument → `RESIZE_TO`; `720P` and `--video NAME` in any order; unknown resolution, missing `--video` value and extra arguments exit with a message.
+- **Why:** same rules as `main.py`: config default, command line overrides.
+- **Test double:** none.
+
+### `test_videos_to_resize_skips_earlier_copies`
+- **What it checks:** "all videos" skips `*_480p.mp4` copies; `--video song` picks one.
+- **Why:** running it twice must not create `x_480p_480p.mp4`.
+- **Test double:** stub — `IN_VIDEO_DIR` points to a temp folder with empty files.
+
+### `test_resize_skips_small_video_without_ffmpeg`
+- **What it checks:** a small video is skipped with a message and ffmpeg is not called.
+- **Why:** no needless work, the user sees why.
+- **Test double:** stub — `video_size`; spy — `run_ffmpeg`.
+
+### `test_resize_with_real_ffmpeg_keeps_original`
+- **What it checks:** integration with real ffmpeg: a 1280x720 clip with sound → `clip_480p.mp4` 854x480 with sound; the original bytes are unchanged.
+- **Why:** proves the real command works and never touches the original.
+- **Test double:** none (clip generated with `testsrc` + `sine`, no network).
+
+## `test/test_trim_video.py`
+
+`trim_video.py`: cut parts of a reference video into new copies.
+
+### `test_parse_time` (4 cases)
+- **What it checks:** `8`, `2.5`, `1:05` and `0:7.5` become seconds.
+- **Why:** users type times in different ways.
+- **Test double:** none.
+
+### `test_parse_range` (3 cases), `test_parse_range_errors` (5 cases)
+- **What they check:** `2-8`, `2.5-8` and `1:05-1:20` are parsed (the label uses `m` instead of `:`); reversed, empty, too many parts and non-numbers exit with a message.
+- **Why:** `:` is not allowed in Windows file names; a wrong range must not produce an empty or wrong clip.
+- **Test double:** none.
+
+### `test_parse_args_several_ranges_and_video`, `test_parse_args_combine_flag`, `test_parse_args_errors` (2 cases)
+- **What they check:** several ranges and `--video NAME` in any order; `--combine` is off by default and on when given; no range or a missing `--video` value exit with the usage.
+- **Why:** one command can cut several parts.
+- **Test double:** none.
+
+### `test_fit_to_video_shortens_the_end`, `test_fit_to_video_start_after_end_exits`
+- **What they check:** a range past the end is shortened and its label (file name) shows the real end; a range that starts after the end exits.
+- **Why:** the file name must match what is really in the file.
+- **Test double:** none.
+
+### `test_trimmed_path`
+- **What it checks:** `boxing-video.MOV` + `2-8` → `boxing-video_2-8s.mp4` next to it.
+- **Why:** predictable names for `--video` in `main.py`.
+- **Test double:** none.
+
+### `test_trim_command`
+- **What it checks:** ffmpeg gets `-ss` = start and `-t` = end − start, and writes to the copy.
+- **Why:** start/length are easy to mix up (`-t` is a length, not an end time).
+- **Test double:** spy — `run_ffmpeg`; stubs — `video_duration`, `file_size_mb`.
+
+### `test_main_uses_config_video`
+- **What it checks:** without `--video`, `REFERENCE_VIDEO` from the config is used, and every range makes its own copy.
+- **Why:** same rule as `main.py`: config default, command line overrides.
+- **Test double:** stubs — `IN_VIDEO_DIR`, `REFERENCE_VIDEO`, `video_duration`; spy — `trim`.
+
+### `test_combined_path`
+- **What it checks:** `song.MP4` + `4-11`, `22-26` → `song_4-11+22-26s.mp4`.
+- **Why:** the name shows which parts are inside and in what order.
+- **Test double:** none.
+
+### `test_concat_filter_with_and_without_audio`
+- **What it checks:** the ffmpeg filter cuts every range (`trim` / `atrim`) and joins them with `concat`; without audio there is no `atrim` and `a=0`.
+- **Why:** a video without sound would make ffmpeg fail if the filter asked for audio.
+- **Test double:** none.
+
+### `test_main_combines_only_when_asked` (3 cases)
+- **What it checks:** `--combine` with 2 ranges joins them once; without it, or with only 1 range, normal copies are made.
+- **Why:** separate copies stay the default; one range has nothing to join.
+- **Test double:** spies — `trim`, `combine`; stubs — `IN_VIDEO_DIR`, `video_duration`.
+
+### `test_combine_with_real_ffmpeg`
+- **What it checks:** integration with real ffmpeg: 0–1 s + 2–3 s of a 4 s clip with sound → one ~2 s video with sound; the original is unchanged.
+- **Why:** proves the real concat works, including audio.
+- **Test double:** none (clip generated with `testsrc` + `sine`, no network).
+
+### `test_trim_with_real_ffmpeg_keeps_original`
+- **What it checks:** integration with real ffmpeg: 1–3 s of a 4 s clip with sound → a ~2 s copy with sound; the original bytes are unchanged.
+- **Why:** proves the cut really works and never touches the original.
+- **Test double:** none (clip generated with `testsrc` + `sine`, no network).
+
 ## How to run
 
     python -m pytest -v

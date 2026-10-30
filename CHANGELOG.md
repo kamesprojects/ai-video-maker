@@ -24,12 +24,18 @@ Every entry references its issue number, e.g. `(#1)`.
 - `AGENTS.md` and `CLAUDE.md`: rules for AI agents, above all never to run a paid generation, only to write the command for the user.
 - Approximate cost: `pricing.json` (list prices + billing rules per model, with sources) and `pricing.py`. `--test` prints `Est. cost:` before paying; `PRICE_MULTIPLIER` in the config for discounts.
 - JSON record next to every output video (same name): status, request ID, model, prompt, input/uploaded/output video info, parameters, API response, estimated cost. Also written for failed, NSFW, cancelled and error runs (cost 0).
+- `COMMANDS.md`: short reference of all commands and what they return. `--help` now mentions the `.json` record.
+- `resize_videos.py`: downscaled copies of reference videos (`<name>_480p.mp4`), resolution from `RESIZE_TO` in the config or the command line, optional `--video`; never upscales, originals kept.
+- `trim_video.py`: cuts parts of a reference video into copies (`<name>_2-8s.mp4`); ranges in seconds, decimals or minutes:seconds, several at once, optional `--video`; frame-accurate, original kept.
+- `utils.QUALITY_ARGS` and `utils.find_one_video()` shared by `main.py`, `resize_videos.py` and `trim_video.py`.
+- `trim_video.py --combine`: joins the cut parts in order into one video (`<name>_4-11+22-26s.mp4`); without it each part is a separate copy.
 - Handling of failed, cancelled and NSFW-moderated generations.
 - `zip_media.py`: packs `media/in` and `media/out` into one zip; `--repo` packs only the files git would push (no ignored files, secrets or media).
 - Test suite in `test/` with test doubles (fake Higgsfield client, fake MP4) and docs in `test/docs/`.
 - `README.md`, `VISION.md`, `CONTRIBUTING.md`, `.env.example`.
 
 ### Changed
+- `README.md` shortened to setup + what the project offers; details live in `COMMANDS.md`, `--help`, `config.example.py` and the code.
 - `config.py` is now personal and ignored by git. Defaults live in `config.example.py` (committed); `settings.py` merges both, so `config.py` is optional and may contain only changed values.
 
 ### Fixed

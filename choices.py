@@ -37,5 +37,6 @@ class PromptName(Key):
     """The value is what you type on the command line. Texts are in prompt.py."""
 
     ONE_PERSON = "one-person"
+    ONE_PERSON_ONLY_FACE = "one-person-only-face"
     FOUR_PEOPLE = "four-people"
     TMP_PROMPT = "tmp-prompt"   # text from prompts/tmp-prompt.txt
